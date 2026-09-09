@@ -4,6 +4,7 @@ import sqlite3
 import datetime
 
 from . import config
+from . import channels
 from .filters import scan_job
 
 _SCHEMA = """
@@ -32,6 +33,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     published_at TEXT,           -- 来源发布日期（多数平台不公开，可为空）
     apply_state INTEGER DEFAULT 0, -- 投递状态：0=未投；1=投递箱(待投)；2=已投
     apply_note TEXT DEFAULT '',  -- 针对该岗位生成的投递理由
+    official_url TEXT DEFAULT '', -- 企业官方招聘入口（核验/直达用，可空）
     dedup_key TEXT               -- 跨平台去重键（预留）
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_src_job ON jobs(source, job_id);
@@ -51,13 +53,30 @@ def connect():
     return conn
 
 
+def backfill_official_urls() -> int:
+    """为已有岗位按公司名回填企业官网招聘入口。"""
+    conn = connect()
+    rows = conn.execute(
+        "SELECT id, company FROM jobs WHERE official_url IS NULL OR official_url=''").fetchall()
+    n = 0
+    for r in rows:
+        u = channels.official_for(str(r["company"] or ""))
+        if u:
+            conn.execute("UPDATE jobs SET official_url=? WHERE id=?", (u, r["id"]))
+            n += 1
+    conn.commit()
+    conn.close()
+    return n
+
+
 def init_db():
     """建表 + 增量迁移（为老库补充新列）。"""
     conn = connect()
     conn.executescript(_SCHEMA)
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(jobs)").fetchall()}
     for col, decl in (("deadline", "TEXT"), ("published_at", "TEXT"),
-                      ("apply_state", "INTEGER DEFAULT 0"), ("apply_note", "TEXT DEFAULT ''")):
+                      ("apply_state", "INTEGER DEFAULT 0"), ("apply_note", "TEXT DEFAULT ''"),
+                      ("official_url", "TEXT DEFAULT ''")):
         if col not in cols:
             conn.execute(f"ALTER TABLE jobs ADD COLUMN {col} {decl}")
     # 迁移完成后才建涉及新列的索引
@@ -84,13 +103,14 @@ def upsert_jobs(jobs: list) -> dict:
                 "SELECT id, is_fake FROM jobs WHERE source=? AND job_id=?",
                 (j.get("source", "实习僧"), job_id))
             row = cur.fetchone()
+            official = str(j.get("official_url") or "") or channels.official_for(str(j.get("company") or ""))
             vals = (
                 j.get("source", "实习僧"), job_id, j.get("title"), j.get("company"),
                 j.get("city"), j.get("salary"), j.get("salary_min"), j.get("salary_max"),
                 j.get("degree"), j.get("duration"), j.get("tags"), j.get("industry"),
                 j.get("link"), now, now,
                 1, int(is_fake), reason, 0,
-                j.get("deadline"), j.get("published_at"),
+                j.get("deadline"), j.get("published_at"), official,
                 j.get("dedup_key"),
             )
             if row is None:
@@ -98,8 +118,8 @@ def upsert_jobs(jobs: list) -> dict:
                     """INSERT INTO jobs (source, job_id, title, company, city, salary,
                        salary_min, salary_max, degree, duration, tags, industry, link,
                        fetched_at, updated_at, is_active, is_fake, fake_reason, favorite,
-                       deadline, published_at, dedup_key)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", vals)
+                       deadline, published_at, official_url, dedup_key)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", vals)
                 res["inserted"] += 1
             else:
                 # 已有记录：更新内容；风险标记取“任一来源判定为风险”则标风险
@@ -109,12 +129,13 @@ def upsert_jobs(jobs: list) -> dict:
                        updated_at=?, is_active=1,
                        deadline = COALESCE(?, deadline),
                        published_at = COALESCE(?, published_at),
+                       official_url = COALESCE(?, official_url),
                        is_fake = MAX(is_fake, ?), fake_reason = CASE WHEN is_fake=1 THEN fake_reason ELSE ? END
                        WHERE source=? AND job_id=?""",
                     (j.get("title"), j.get("company"), j.get("city"), j.get("salary"),
                      j.get("salary_min"), j.get("salary_max"), j.get("degree"),
                      j.get("duration"), j.get("tags"), j.get("industry"), j.get("link"),
-                     now, j.get("deadline"), j.get("published_at"),
+                     now, j.get("deadline"), j.get("published_at"), official,
                      int(is_fake), reason, j.get("source", "实习僧"), job_id))
                 res["updated"] += 1
             if is_fake:

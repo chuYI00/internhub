@@ -30,6 +30,7 @@ def _display_df(rows):
     df["收录时间"] = df.get("fetched_at", pd.Series(dtype=str)).fillna("")
     df["投递箱"] = df.get("apply_state", pd.Series(dtype=int)).fillna(0).astype(int) >= 1
     df["favorite"] = df.get("favorite", pd.Series(dtype=int)).fillna(0).astype(int) > 0
+    df["企业官网"] = df.get("official_url", pd.Series(dtype=str)).fillna("")
     return df
 
 
@@ -68,6 +69,7 @@ def main():
     st.caption("聚合公开实习信息 · 投递材料按岗位定制 · 本地个人学习使用")
 
     db.init_db()
+    db.backfill_official_urls()
 
     with st.sidebar:
         st.header("① 抓取设置")
@@ -136,7 +138,7 @@ def main():
             df["状态"] = dl.apply(lambda x: "已截止" if (len(x) == 10 and x < today) else ("临近" if (len(x) == 10 and x <= today) else "可投"))
             st.caption(f"共 {len(df)} 条 · 勾选「投递箱」→ 保存后到「投递工作台」生成材料")
             cols = ["id", "title", "company", "city", "salary", "degree", "标签",
-                    "截止时间", "状态", "投递箱", "source", "link", "favorite"]
+                    "截止时间", "状态", "投递箱", "source", "link", "企业官网", "favorite"]
             edit = st.data_editor(
                 df[cols],
                 hide_index=True,
@@ -150,7 +152,8 @@ def main():
                     "状态": "状态",
                     "投递箱": st.column_config.CheckboxColumn("🎯投递箱", help="勾选后到“投递工作台”批量准备材料"),
                     "source": "来源",
-                    "link": st.column_config.LinkColumn("投递链接（官方）"),
+                    "link": st.column_config.LinkColumn("投递（原平台）", help="岗位来源平台的原始详情页/申请链接"),
+                    "企业官网": st.column_config.LinkColumn("企业官网招聘", help="公司官方招聘入口（核验/直达用，缺省为空）"),
                     "favorite": st.column_config.CheckboxColumn("⭐收藏"),
                 },
                 num_rows="fixed", width="stretch", height=560,
@@ -177,7 +180,10 @@ def main():
             for job in box_rows:
                 title = str(job.get("title") or "")
                 with st.expander(f"【{job.get('company')}】{title[:36]}｜{job.get('city')}｜{job.get('salary') or '—'}"):
-                    st.markdown(f"官方链接：{job.get('link')}")
+                    line = f"原平台投递：{job.get('link')}"
+                    if job.get("official_url"):
+                        line += f"\n\n企业官网招聘：{job['official_url']}（投递前建议先到官网核验）"
+                    st.markdown(line)
                     from ihub import resume
                     note = job.get("apply_note") or resume.apply_message(job)
                     edited = st.text_area("投递理由/开场白（可改）", value=note,
@@ -218,8 +224,25 @@ def main():
         st.markdown(
             "1. 抓取 → 筛选 → 勾选 🎯投递箱 → 保存；\n"
             "2. 「投递工作台」逐条生成**投递理由**与**按岗位定制简历**(docx 输出到 投递文件/ 文件夹)，\n"
-            "3. 点官方链接**手动投递**后标记“已投”；\n"
+            "3. 点**原平台链接**投递，或到**企业官网招聘**页核验后再投，完成后标记“已投”；\n"
             "4. 自动更新：`python scheduler.py --hours 6`；其他来源可 CSV 导入：`python run_import.py 表.csv`。")
+        st.markdown("#### 🛰 信息渠道说明（企业官网 + 更多来源）")
+        st.markdown(
+            "- **两列链接的含义**：`投递（原平台）`= 实习僧原始详情页（招聘方在用的申请入口）；`企业官网招聘`= 公司官方招聘入口，用于**核验与官网直达**；\n"
+            "- 内置已核验的官网入口目前含：字节跳动、蔚来（持续补充）。其余为空属正常，可自行添加：编辑 `data/official_urls.json`（文件不存在则新建），格式：`{\"公司名\": \"https://官网招聘地址\"}`，重开页面即生效；\n"
+            "- **更多自动渠道**：① 实习僧（当前）；② `RSS订阅`：站点官方提供 RSS/Atom 时可接入（在 `ihub/config.py` 的 `RSS_FEEDS` 添加地址）；③ `CSV导入`：官网/群文件/Excel 整理的清单直接导入；\n"
+            "- BOSS直聘/智联/牛客等大平台需登录+强反爬，为避免封号与违规未自动接入，建议到官网或通过其官方 App 使用。")
+        st.markdown("#### 🏢 就业平台官方入口（登录后自用，含政府/官方渠道）")
+        st.markdown(
+            "下列平台**岗位列表与投递都需本人登录**（学信网/手机号），工具不做代登录抓取；"
+            "建议在平台内筛选收藏后，用「CSV 导入」把心仪岗位带回本工具统一管理：\n"
+            "- 国家大学生就业服务平台（教育部·24365）：https://www.ncss.cn\n"
+            "- 国聘（国投人力·国聘行动）：https://www.guopin.com\n"
+            "- 实习僧：https://www.shixiseng.com\n"
+            "- BOSS直聘：https://www.zhipin.com　｜　智联招聘：https://www.zhaopin.com\n"
+            "- 前程无忧：https://www.51job.com　｜　牛客网：https://www.nowcoder.com\n"
+            "- 猎聘：https://www.liepin.com　｜　拉勾：https://www.lagou.com\n\n"
+            "**高校就业信息网**（你最该盯的渠道）：登录本校就业系统或就业公众号，很多企业只通过高校渠道招 2027 届实习/校招。")
         st.markdown("#### ⚠️ 合规与免责声明")
         st.warning(DISCLAIMER)
         st.markdown(
