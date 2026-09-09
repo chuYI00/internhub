@@ -1,0 +1,8 @@
+venv/
+__pycache__/
+*.pyc
+*.log
+data/
+投递文件/
+.DS_Store
+*.log.err

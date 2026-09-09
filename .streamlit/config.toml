@@ -1,0 +1,6 @@
+[browser]
+gatherUsageStats = false
+
+[server]
+# 局域网内其他设备可访问；只本机用也可以保持默认
+headless = false
