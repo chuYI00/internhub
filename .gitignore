@@ -6,3 +6,4 @@ data/
 投递文件/
 .DS_Store
 *.log.err
+_web.log*
