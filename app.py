@@ -123,7 +123,8 @@ def main():
     if s["fake"]:
         st.warning(f"已标记 {s['fake']} 条疑似风险岗位，可在侧边栏勾选“只看风险标记”核对。")
 
-    tab1, tab2, tab3, tab4 = st.tabs(["岗位列表", "🎯 投递工作台", "我的收藏", "说明与合规"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        ["岗位列表", "🎯 投递工作台", "我的收藏", "👤 我的资料", "说明与合规"])
 
     # ============ 岗位列表 ============
     with tab1:
@@ -169,17 +170,22 @@ def main():
     # ============ 投递工作台 ============
     with tab2:
         st.warning(AUTOBOT_NOTE)
-        box_rows = db.query(apply_state=1, active_only=False, limit=300)
-        if not box_rows:
-            st.info("投递箱是空的：到“岗位列表”勾选 🎯 后点「保存 投递箱+收藏」。")
+        scope = st.radio("查看", ["🎯 投递箱（待投）", "✅ 已投记录"], horizontal=True)
+        state = 1 if "投递箱" in scope else 2
+        rows = db.query(apply_state=state, active_only=False, limit=400)
+        if not rows:
+            hint = ("投递箱是空的：到“岗位列表”勾选 🎯 后点「保存 投递箱+收藏」。"
+                    if state == 1 else "还没有已投记录：在投递箱逐条处理并点「✅ 标记已投」后会出现这里。")
+            st.info(hint)
         else:
-            if st.button("📤 导出投递清单 CSV"):
+            if state == 1 and st.button("📤 导出投递清单 CSV"):
                 p = export_box_csv()
                 st.success(f"已导出：{p}")
-            st.caption(f"投递箱共 {len(box_rows)} 条，逐条处理：")
-            for job in box_rows:
+            st.caption(f"{'投递箱（待投）' if state == 1 else '已投'} 共 {len(rows)} 条，逐条处理：")
+            for job in rows:
                 title = str(job.get("title") or "")
-                with st.expander(f"【{job.get('company')}】{title[:36]}｜{job.get('city')}｜{job.get('salary') or '—'}"):
+                mark = "✅" if state == 2 else "🎯"
+                with st.expander(f"{mark}【{job.get('company')}】{title[:36]}｜{job.get('city')}｜{job.get('salary') or '—'}"):
                     line = f"原平台投递：{job.get('link')}"
                     if job.get("official_url"):
                         line += f"\n\n企业官网招聘：{job['official_url']}（投递前建议先到官网核验）"
@@ -187,23 +193,32 @@ def main():
                     from ihub import resume
                     note = job.get("apply_note") or resume.apply_message(job)
                     edited = st.text_area("投递理由/开场白（可改）", value=note,
-                                          key=f"note_{job['id']}", height=130)
-                    c1, c2, c3, c4 = st.columns(4)
-                    if c1.button("💾 保存理由", key=f"saven_{job['id']}"):
-                        db.set_apply_note(job["id"], edited)
-                        st.success("已保存")
-                    if c2.button("📄 生成定制简历", key=f"cv_{job['id']}"):
-                        try:
-                            p = gen_resume_for(job)
-                            st.success(f"已生成：{p}")
-                        except Exception as e:
-                            st.error(f"生成失败：{e}")
-                    if c3.button("✅ 标记已投", key=f"done_{job['id']}"):
-                        db.set_apply_state([(job["id"], 2)])
-                        st.rerun()
-                    if c4.button("➖ 移出", key=f"out_{job['id']}"):
-                        db.set_apply_state([(job["id"], 0)])
-                        st.rerun()
+                                          key=f"note_{job['id']}_{state}", height=130)
+                    if state == 1:
+                        c1, c2, c3, c4 = st.columns(4)
+                        if c1.button("💾 保存理由", key=f"saven_{job['id']}"):
+                            db.set_apply_note(job["id"], edited)
+                            st.success("已保存")
+                        if c2.button("📄 生成定制简历", key=f"cv_{job['id']}"):
+                            try:
+                                p = gen_resume_for(job)
+                                st.success(f"已生成：{p}")
+                            except Exception as e:
+                                st.error(f"生成失败：{e}")
+                        if c3.button("✅ 标记已投", key=f"done_{job['id']}"):
+                            db.set_apply_state([(job["id"], 2)])
+                            st.rerun()
+                        if c4.button("➖ 移出投递箱", key=f"out_{job['id']}"):
+                            db.set_apply_state([(job["id"], 0)])
+                            st.rerun()
+                    else:
+                        c1, c2 = st.columns(2)
+                        if c1.button("↩ 取消已投（回到投递箱）", key=f"undone_{job['id']}", type="primary"):
+                            db.set_apply_state([(job["id"], 1)])
+                            st.rerun()
+                        if c2.button("🗑 删除记录", key=f"del_{job['id']}"):
+                            db.set_apply_state([(job["id"], 0)])
+                            st.rerun()
 
     # ============ 我的收藏 ============
     with tab3:
@@ -218,8 +233,64 @@ def main():
                                         "link": st.column_config.LinkColumn("投递链接（官方）")},
                          width="stretch")
 
-    # ============ 说明 ============
+    # ============ 👤 我的资料 ============
     with tab4:
+        st.markdown("#### 👤 我的资料（生成投递材料时使用）")
+        st.caption("资料只保存在本机 `data/profile.json`，不上传任何服务器。任何人使用本工具时，在这里换成自己的简历即可。")
+        from ihub import profile as prof_mod
+        cur = prof_mod.load()
+
+        up = st.file_uploader("① 上传你的简历（.docx / .txt，可选）", type=["docx", "txt"])
+        if up is not None:
+            text = ""
+            try:
+                if up.name.lower().endswith(".docx"):
+                    import io as _io
+                    from docx import Document as _Doc
+                    d = _Doc(_io.BytesIO(up.read()))
+                    text = "\n".join(p.text for p in d.paragraphs)
+                else:
+                    text = up.read().decode("utf-8", "ignore")
+            except Exception as e:
+                st.error(f"读取失败：{e}")
+            if text:
+                guess = prof_mod.extract_from_text(text)
+                st.success(f"已读取 {len(text)} 字；自动识别：{guess or '（未识别到关键信息，请手动填写）'}")
+                st.session_state["uploaded_text"] = text
+                for k, v in guess.items():
+                    st.session_state[f"pf_{k}"] = v
+
+        st.markdown("② 核对/修改字段（保存后即刻用于生成材料）")
+        cols = st.columns(2)
+        fields = [("name", "姓名"), ("gender", "性别"), ("city", "现居/生源地"),
+                  ("phone", "电话"), ("email", "邮箱"), ("school", "学校"),
+                  ("major", "专业"), ("degree", "学历"), ("edu_range", "在校时间"),
+                  ("graduate_year", "毕业届别"), ("gpa", "GPA"), ("scholarship", "奖学金/荣誉"),
+                  ("english", "英语/证书"), ("intent", "求职意向（一句话）")]
+        newvals = {}
+        for i, (k, label) in enumerate(fields):
+            with cols[i % 2]:
+                newvals[k] = st.text_input(label, value=st.session_state.get(f"pf_{k}", cur.get(k, "")),
+                                           key=f"in_{k}")
+
+        st.markdown("③ 多行内容（一行一条）")
+        newvals["highlights"] = st.text_area("核心亮点（3-5 条）", value=cur.get("highlights", ""), height=110)
+        newvals["skills"] = st.text_area("技能（一行一类）", value=cur.get("skills", ""), height=90)
+        newvals["experiences"] = st.text_area(
+            "实践/工作经历（每行：标题|时间|描述）", value=cur.get("experiences", ""), height=150)
+        newvals["certificates"] = st.text_input("证书", value=cur.get("certificates", ""))
+        newvals["self_eval"] = st.text_area("自我评价", value=cur.get("self_eval", ""), height=90)
+
+        c1, c2 = st.columns([1, 3])
+        if c1.button("💾 保存资料", type="primary"):
+            p = prof_mod.save(newvals)
+            st.success(f"已保存到：{p}（下一条投递材料就会用你的信息）")
+        if c2.button("♻️ 恢复示例资料"):
+            p = prof_mod.save(dict(prof_mod.DEFAULT))
+            st.info("已恢复为内置示例资料（罗广睿）")
+
+    # ============ 说明 ============
+    with tab5:
         st.markdown("#### 使用说明")
         st.markdown(
             "1. 抓取 → 筛选 → 勾选 🎯投递箱 → 保存；\n"

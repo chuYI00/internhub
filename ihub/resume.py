@@ -1,249 +1,188 @@
 # -*- coding: utf-8 -*-
-"""按岗位定制简历与投递材料的生成器（本地离线，用真实信息拼装，不做虚假承诺）。
+"""按岗位定制简历与投递材料（读取 data/profile.json，支持任何使用者换成自己的资料）。
 
 用法：
   from ihub import resume
-  resume.build_docx(job, 'out/job_resume.docx')   # 生成定制简历
-  resume.apply_message(job)                          # 生成投递开场白/理由
+  resume.apply_message(job)              # 生成投递开场白
+  resume.build_docx(job, 'out/cv.docx')  # 生成定制简历
+资料在网页「👤 我的资料」里上传/修改，只存本机。
 """
 import os
+import re
 
-# ---------------- 个人真实信息基线（与你的简历一致，勿夸大） ----------------
-NAME = "罗广睿"
-PROFILE = {
-    "phone": "13500135000",
-    "email": "2810845176@qq.com",
-    "city": "云南大理",
-    "gender": "男",
-    "birth": "2005.01.14",
-    "politics": "共青团员",
-    "school": "中国民航大学",
-    "major": "物联网工程",
-    "degree": "本科",
-    "edu_range": "2023.09-2027.06",
-    "gpa": "3.47/4.0",
-    "scholarship": "连续三年获“人民奖学金”",
-    "english": "CET-4、CET-6 已通过，能阅读英文技术文档",
-}
-
-COMMON_SKILLS = [
-    "Python / C 基础编程，Linux（Ubuntu / WSL2）、Git 基本操作，Office / WPS 熟练",
-    "AI 工具重度用户：ChatGPT / Gemini / DeepSeek / Claude Code",
-    "AIGC 创作：Stable Diffusion 文生图、Ultimate Vocal Remover 人声分离",
-]
-
-EXPERIENCES = [
-    ("抖音主播切片账号 · 独立运营", "2025 年（持续）",
-     "围绕主播直播内容二次创作，独立完成选题、剪辑节奏、字幕封面与发布运营，账号粉丝 3000+，对热点与数据反馈敏感，习惯用 AI 工具提效。"),
-    ("大模型本地知识库问答系统（个人项目）", "2026.03-2026.05",
-     "Python + LangChain + Chroma + Streamlit 搭建文档问答 Web 应用，集成大模型 API，独立完成部署与测试，理解提示词工程与 AI 应用落地。"),
-    ("政府办公室助理（社会实践）", "2025.07-2025.08",
-     "云南省大理州巍山县大仓镇人民政府：文件整理归档与数据录入 100+ 份、群众接待与问题记录反馈 20+ 件，细心负责、流程规范。"),
-    ("OpenHarmony IoT 开发实践", "2025.10-2026.02",
-     "独立完成环境搭建、编译烧录与华为云平台设备接入，输出规范化操作文档。"),
-    ("家教（初中数学/物理）", "2024.09-2025.01",
-     "一对一制定计划并跟踪效果，学生期末数学 70→85 分，表达与共情沟通能力强。"),
-]
+from . import profile as profile_mod
 
 # ---------------- 方向识别 ----------------
 DIR_MEDIA = ["新媒体", "内容", "运营", "直播", "剪辑", "编辑", "文案", "编导", "市场",
-             "传播", "短视频", "图文", "电商内容", "AIGC内容", "策划", "品牌", "营销"]
-DIR_PM = ["产品经理", "产品", "PM", "需求", "项目", "商业化"]
-DIR_AI = ["AI", "人工智能", "大模型", "智能体", "算法", "LangChain", "语音助手", "声学算法"]
+             "传播", "短视频", "图文", "策划", "品牌", "营销", "主播"]
+DIR_PM = ["产品经理", "产品", "PM", "需求", "商业化"]
+DIR_AI = ["AI", "人工智能", "大模型", "智能体", "算法", "LangChain", "语音", "AIGC"]
 DIR_HW = ["硬件", "嵌入式", "电子", "单片机", "MCU", "射频", "声学", "穿戴", "耳机", "音箱",
-          "音频", "IoT", "物联网", "测试", "质量", "结构", "驱动", "固件", "软件开发", "开发"]
-DIR_SOFT = ["开发", "后端", "前端", "软件", "数据", "算法工程", "运维", "IT", "测试开发"]
+          "音频", "IoT", "物联网", "测试", "质量", "结构", "驱动", "固件", "民航", "机场"]
+DIR_SOFT = ["开发", "后端", "前端", "软件", "数据", "运维", "IT", "测试开发", "工程师"]
+
+INTENT = {
+    "media": "新媒体 / 短视频内容运营 · AI 内容创作方向",
+    "ai": "AI 应用 / 大模型方向",
+    "pm": "产品经理（AI / 内容 / 硬件方向）",
+    "hw": "嵌入式 / 物联网 / 硬件研发测试方向",
+    "soft": "软件开发 / 测试 / IT 方向",
+    "general": "综合方向（运营 / AI 应用 / 工程技术）",
+}
+
+# 使用者资料亮点不足时用于补齐的方向话术
+DIR_FALLBACK = {
+    "media": ["熟悉短视频内容生产全流程（选题-剪辑-发布-复盘）", "能用 AI 工具显著提升内容产出效率"],
+    "ai": ["有 AI 应用开发实践（提示词工程 / 大模型调用）", "对 AI 工具上手快，能迁移到业务场景"],
+    "pm": ["具备需求梳理与文档撰写能力", "能兼顾用户体验与技术可行性"],
+    "hw": ["有软硬件项目动手经验，能读英文技术文档", "熟悉调试流程与问题排查"],
+    "soft": ["掌握 Python / C 与 Linux 常用操作", "有完整项目从 0 到 1 的实践经验"],
+    "general": ["学习能力强，能快速上手新工具", "沟通顺畅、执行到位"],
+}
 
 
 def detect_direction(job) -> str:
     blob = " ".join(str(job.get(k) or "") for k in
                     ("title", "company", "tags", "industry", "requirement")).lower()
-    if any(k in blob for k in DIR_MEDIA):
-        return "media"
-    if any(k in blob for k in DIR_AI):
-        return "ai"
-    if any(k in blob for k in DIR_PM):
-        return "pm"
-    if any(k in blob for k in DIR_HW):
-        return "hw"
-    if any(k in blob for k in DIR_SOFT):
-        return "soft"
+    for keys, name in ((DIR_MEDIA, "media"), (DIR_AI, "ai"), (DIR_PM, "pm"),
+                       (DIR_HW, "hw"), (DIR_SOFT, "soft")):
+        if any(k in blob for k in keys):
+            return name
     return "general"
 
 
-INTENT = {
-    "media": "新媒体 / 短视频内容运营 · AI 内容创作（AIGC）方向",
-    "ai": "AI 应用 / 大模型产品方向（实习）",
-    "pm": "产品经理（AI / 内容 / 硬件方向）实习",
-    "hw": "嵌入式 / 物联网 / 硬件研发测试方向（实习）",
-    "soft": "软件开发 / 测试 / IT 方向（实习）",
-    "general": "运营 / AI 应用 / 工程技术方向（实习，接受培养与轮岗）",
-}
-
-DIR_BULLETS = {
-    "media": [
-        "独立运营抖音主播切片账号，粉丝 3000+：选题-剪辑-字幕封面-发布复盘全流程实操",
-        "熟练使用剪映等剪辑工具与 Stable Diffusion、UVR 等 AIGC 工具，能用 AI 把内容产出提效",
-        "重度使用 ChatGPT/Gemini/DeepSeek/Claude Code，擅长把工具迁移到真实工作流",
-    ],
-    "ai": [
-        "独立完成基于 LangChain 的大模型知识库问答应用（文档上传→检索→问答），理解提示词与评估",
-        "重度使用并研究多款大模型/AIGC 工具（GPT/Gemini/DeepSeek/Claude Code、SD、UVR），能拆解体验并快速落地",
-        "既是内容创作者（抖音 3000+ 粉）也是技术学生，能定义场景、理解用户反馈闭环",
-    ],
-    "pm": [
-        "有真实“从 0 到 1”项目复盘：大模型问答应用与抖音账号（3000+ 粉），能拆需求、看数据、迭代",
-        "AI 重度用户 + 物联网工程背景，能平衡用户需求、技术实现与成本",
-        "文档习惯好、沟通直接（政府实践 100+ 份材料、OpenHarmony 全流程文档）",
-    ],
-    "hw": [
-        "物联网工程本科：嵌入式原理、单片机、计算机网络等系统课程 + GPA 3.47",
-        "动手做过完整软硬件项目（ROS2 智能小车、OpenHarmony+Hi3861 开发与华为云接入）",
-        "会用 C/Python、Linux/WSL2、Git，能读英文 datasheet，动手调试能力强",
-    ],
-    "soft": [
-        "Python / C 开发调试经验，能做脚本自动化与简单 Web 应用（Streamlit 问答系统）",
-        "熟悉 Linux（Ubuntu/WSL2）、Git、工具链（OpenHarmony 编译烧录全流程）",
-        "逻辑清晰、文档规范，政府实践与项目经历养成了细心负责的习惯",
-    ],
-    "general": [
-        "学习能力与执行力强：独立完成抖音账号、AI 应用、IoT 项目等多个 0→1 实践",
-        "AI 工具重度用户，能快速上手新工具并帮助团队提效",
-        "细心负责、沟通好，GPA 3.47、连续三年人民奖学金",
-    ],
-}
-
-
-def direction_of(job):
-    return detect_direction(job)
+def highlights_for(job, prof=None) -> list:
+    prof = prof or profile_mod.load()
+    hs = profile_mod.lines(prof.get("highlights"))
+    d = detect_direction(job)
+    if len(hs) >= 3:
+        return hs[:3]
+    return (hs + DIR_FALLBACK[d])[:3]
 
 
 def intent_line(job) -> str:
-    d = detect_direction(job)
+    prof = profile_mod.load()
     t = str(job.get("title") or "该岗位").strip()
     c = str(job.get("company") or "").strip()
     city = str(job.get("city") or "").strip()
     target = f"{t}（{c}{('/' + city) if city and city != '全国' else ''}）"
-    return f"应聘 {target}　|　{INTENT[d]}"
+    return f"应聘 {target}　|　{prof.get('intent') or INTENT[detect_direction(job)]}"
 
 
 def apply_message(job) -> str:
-    """生成简短、得体、可改写的投递开场白。"""
-    d = detect_direction(job)
+    prof = profile_mod.load()
     t = str(job.get("title") or "该岗位").strip()
-    c = str(job.get("company") or "贵司").strip()
-    extra = DIR_BULLETS[d][0]
-    return (f"您好！我是中国民航大学物联网工程专业 2027 届本科生罗广睿，看到贵司正在招聘「{t}」，"
-            f"非常感兴趣并希望投递。我的匹配点：{extra}。同时我是 AI 工具重度用户并做过抖音账号运营"
-            f"（粉丝 3000+）等真实项目，学习快、执行强，能稳定实习 2 个月以上。简历详见附件，期待与您进一步沟通！")
+    name = prof.get("name") or "我"
+    school = prof.get("school") or ""
+    major = prof.get("major") or ""
+    year = prof.get("graduate_year") or ""
+    hl = highlights_for(job, prof)[0]
+    return (f"您好！我是{school}{major}专业 {year} 届学生{name}，看到贵司正在招聘「{t}」，非常感兴趣并希望投递。"
+            f"我的匹配点：{hl}。学习快、执行强，能稳定实习 2 个月以上。简历详见附件，期待与您进一步沟通！")
 
 
-def _simplify_path_safe(name: str) -> str:
-    import re
-    return re.sub(r'[\\/:*?"<>|\s]+', "_", name or "job")[:50]
+def safe_name(s: str) -> str:
+    return re.sub(r'[\\/:*?"<>|\s]+', "_", s or "job")[:50]
+
+
+# 兼容旧调用名
+_simplify_path_safe = safe_name
 
 
 def build_docx(job, out_path: str) -> str:
-    """生成按岗位定制的简历 docx，返回文件路径。"""
     from docx import Document
     from docx.shared import Pt, Cm, RGBColor
     from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
 
-    d = detect_direction(job)
+    prof = profile_mod.load()
     doc = Document()
     sec = doc.sections[0]
     sec.top_margin = sec.bottom_margin = Cm(1.2)
     sec.left_margin = sec.right_margin = Cm(1.4)
+    st = doc.styles["Normal"]
+    st.font.name = "微软雅黑"; st.font.size = Pt(10.5)
+    st.element.rPr.rFonts.set(qn("w:eastAsia"), "微软雅黑")
 
-    style = doc.styles["Normal"]
-    style.font.name = "微软雅黑"
-    style.font.size = Pt(10.5)
-    style._element.rPr.rFonts.set(__import__("docx").oxml.ns.qn("w:eastAsia"), "微软雅黑")
+    def setf(r, size=10.5, bold=False, color="2A2A2A"):
+        r.font.name = "微软雅黑"; r.font.size = Pt(size); r.bold = bold
+        r.font.color.rgb = RGBColor.from_string(color)
+        rPr = r._element.get_or_add_rPr()
+        rf = rPr.find(qn("w:rFonts"))
+        if rf is None:
+            rf = OxmlElement("w:rFonts"); rPr.append(rf)
+        rf.set(qn("w:eastAsia"), "微软雅黑")
 
-    def para(txt="", bold=False, size=10.5, color=None, align=None, space_after=4, space_before=0):
+    def para(txt="", size=10.5, bold=False, color="2A2A2A", align=None, after=3, before=0):
         p = doc.add_paragraph()
-        if align:
+        if align is not None:
             p.alignment = align
-        p.paragraph_format.space_after = Pt(space_after)
-        p.paragraph_format.space_before = Pt(space_before)
-        r = p.add_run(txt)
-        r.bold = bold
-        r.font.size = Pt(size)
-        if color:
-            r.font.color.rgb = RGBColor.from_string(color)
+        p.paragraph_format.space_after = Pt(after)
+        p.paragraph_format.space_before = Pt(before)
+        setf(p.add_run(txt), size, bold, color)
         return p
 
     def heading(txt):
-        p = para(txt, bold=True, size=13, color="015187", space_before=8, space_after=3)
+        p = doc.add_paragraph()
+        p.paragraph_format.space_before = Pt(9); p.paragraph_format.space_after = Pt(3)
+        setf(p.add_run(txt), 13, True, "015187")
         pPr = p._p.get_or_add_pPr()
-        from docx.oxml.ns import qn
-        from docx.oxml import OxmlElement
-        pbdr = OxmlElement("w:pBdr")
-        bottom = OxmlElement("w:bottom")
-        bottom.set(qn("w:val"), "single"); bottom.set(qn("w:sz"), "6")
-        bottom.set(qn("w:color"), "015187"); bottom.set(qn("w:space"), "2")
-        pbdr.append(bottom); pPr.append(pbdr)
+        b = OxmlElement("w:pBdr"); bot = OxmlElement("w:bottom")
+        bot.set(qn("w:val"), "single"); bot.set(qn("w:sz"), "6")
+        bot.set(qn("w:space"), "2"); bot.set(qn("w:color"), "015187")
+        b.append(bot); pPr.append(b)
 
-    def bullets(items):
-        for it in items:
-            p = doc.add_paragraph(style=None)
-            p.paragraph_format.left_indent = Cm(0.45)
-            p.paragraph_format.space_after = Pt(2)
-            r = p.add_run("▪ "); r.font.color.rgb = RGBColor.from_string("015187"); r.font.size = Pt(10)
-            r2 = p.add_run(it); r2.font.size = Pt(10.5)
-
-    def kv(label, text):
+    def bullet(label, text):
         p = doc.add_paragraph()
-        p.paragraph_format.space_after = Pt(2)
-        r = p.add_run(label); r.bold = True; r.font.size = Pt(10.5)
-        r2 = p.add_run(text); r2.font.size = Pt(10.5)
+        p.paragraph_format.left_indent = Cm(0.45); p.paragraph_format.space_after = Pt(2)
+        setf(p.add_run("▪ "), 10, False, "015187")
+        if label:
+            setf(p.add_run(label), 10.5, True)
+        setf(p.add_run(text), 10.5)
 
-    P = PROFILE
-    # 头部
-    para(NAME, bold=True, size=22, color="015187", align=WD_ALIGN_PARAGRAPH.CENTER, space_after=2)
-    para(f"{P['phone']}　|　{P['email']}　|　{P['city']}　|　{P['gender']}　|　{P['politics']}",
-         size=9, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=1)
-    para(f"{P['school']} · {P['major']}（{P['degree']}在读）　|　毕业：{P['edu_range'].split('-')[1]}",
-         size=9, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=6)
-    para(intent_line(job), bold=True, size=11, color="015187", space_after=8)
+    para(prof.get("name", ""), 22, True, "015187", WD_ALIGN_PARAGRAPH.CENTER, after=2)
+    meta = "　|　".join([x for x in [prof.get("phone"), prof.get("email"), prof.get("city"),
+                                     prof.get("gender")] if x])
+    para(meta, 9, False, "6E6E6E", WD_ALIGN_PARAGRAPH.CENTER, after=1)
+    edu = "　|　".join([x for x in [prof.get("school"), prof.get("major"),
+                                   f"{prof.get('degree', '')}在读", prof.get("edu_range")] if x])
+    para(edu, 9, False, "6E6E6E", WD_ALIGN_PARAGRAPH.CENTER, after=6)
+    para(intent_line(job), 11, True, "015187", after=8)
 
-    # 教育
     heading("教育背景")
-    kv("中国民航大学　", f"{P['major']}（{P['degree']}）　{P['edu_range']}")
-    kv("GPA：", f"{P['gpa']}，无挂科记录；{P['scholarship']}")
-    kv("主修课程：", "物联网原理、嵌入式系统、计算机网络、C 语言程序设计、单片机原理、数据库基础")
-    kv("英语：", P["english"])
+    bullet("", edu)
+    if prof.get("gpa"):
+        bullet("GPA：", str(prof["gpa"]) + (f"，{prof['scholarship']}" if prof.get("scholarship") else ""))
+    if prof.get("english"):
+        bullet("英语：", prof["english"])
 
-    # 与岗位匹配的亮点（方向相关）
     heading("岗位匹配亮点")
-    bullets(DIR_BULLETS[d])
+    for h in highlights_for(job, prof):
+        bullet("", h)
 
-    # 实践经历
     heading("实践经历")
-    for title, rng, desc in EXPERIENCES:
-        p = doc.add_paragraph()
-        p.paragraph_format.space_after = Pt(1)
-        r = p.add_run(f"▎{title}　{rng}"); r.bold = True; r.font.size = Pt(10.5)
-        kv_desc = doc.add_paragraph()
-        kv_desc.paragraph_format.left_indent = Cm(0.45)
-        kv_desc.paragraph_format.space_after = Pt(3)
-        rr = kv_desc.add_run(desc); rr.font.size = Pt(10)
+    for line in profile_mod.lines(prof.get("experiences")):
+        title, rng, desc = profile_mod.parse_experience(line)
+        p = doc.add_paragraph(); p.paragraph_format.space_after = Pt(1)
+        setf(p.add_run(f"▎{title}"), 10.5, True)
+        if rng:
+            setf(p.add_run(f"　{rng}"), 9, False, "6E6E6E")
+        if desc:
+            pp = doc.add_paragraph(); pp.paragraph_format.left_indent = Cm(0.45)
+            pp.paragraph_format.space_after = Pt(3)
+            setf(pp.add_run(desc), 10)
 
-    # 技能
-    heading("技能与工具")
-    bullets(COMMON_SKILLS + [
-        "短视频剪辑与账号运营（抖音 3000+ 粉），办公软件熟练",
-        f"{P['english']}",
-    ])
+    heading("技能与证书")
+    for s in profile_mod.lines(prof.get("skills")):
+        bullet("", s)
+    if prof.get("certificates"):
+        bullet("证书：", prof["certificates"])
 
-    # 荣誉
-    heading("荣誉与校园")
-    bullets([P["scholarship"], "大学英语四级（CET-4）、六级（CET-6）",
-             "校园跑团干事（2023.09 至今）：活动策划组织、成员联络执行"])
-
-    para("", space_after=0)
-    para("（本简历由 InternHub 按岗位方向自动整理，请投递前人工核对后再发送）",
-         size=8, color="9AA5B1", align=WD_ALIGN_PARAGRAPH.CENTER)
+    heading("自我评价")
+    para(prof.get("self_eval", ""), 10.5, after=6)
+    para("（本简历由 InternHub 按岗位自动整理，投递前请人工核对）", 8, False, "9AA5B1",
+         WD_ALIGN_PARAGRAPH.CENTER)
 
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     doc.save(out_path)
