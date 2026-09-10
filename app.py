@@ -123,8 +123,8 @@ def main():
     if s["fake"]:
         st.warning(f"已标记 {s['fake']} 条疑似风险岗位，可在侧边栏勾选“只看风险标记”核对。")
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
-        ["岗位列表", "🎯 投递工作台", "我的收藏", "👤 我的资料", "说明与合规"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+        ["岗位列表", "🏆 为你推荐", "🎯 投递工作台", "我的收藏", "👤 我的资料", "说明与合规"])
 
     # ============ 岗位列表 ============
     with tab1:
@@ -167,8 +167,59 @@ def main():
                 st.success(f"已更新：收藏 {len(fav_ids)} 条；投递箱 {sum(1 for _, v in pairs if v)} 条")
                 st.rerun()
 
-    # ============ 投递工作台 ============
+    # ============ 🏆 为你推荐 ============
     with tab2:
+        st.markdown("#### 🏆 岗位推荐（钱多 / 轻松 / 专业契合 综合打分）")
+        from ihub import prefs as prefs_mod, match
+        p = prefs_mod.load()
+        c1, c2, c3 = st.columns(3)
+        p["w_salary"] = c1.slider("「钱多」权重", 0.0, 1.0, float(p.get("w_salary", 0.4)), 0.05)
+        p["w_match"] = c2.slider("「专业契合」权重", 0.0, 1.0, float(p.get("w_match", 0.35)), 0.05)
+        p["w_easy"] = c3.slider("「轻松」权重", 0.0, 1.0, float(p.get("w_easy", 0.25)), 0.05)
+        c4, c5 = st.columns([1, 2])
+        p["min_salary"] = c4.number_input("期望最低日薪（元/天）", 0, 1000, int(p.get("min_salary", 100)), 10)
+        top_n = c5.slider("展示条数", 10, 200, 30, 10)
+        with st.expander("⚙️ 关键词设置（决定「契合」与「轻松」怎么算）"):
+            p["major_keywords"] = prefs_mod.lists(st.text_area(
+                "专业契合关键词（逗号分隔）", value="，".join(p.get("major_keywords", [])), height=68))
+            p["easy_tags"] = prefs_mod.lists(st.text_area(
+                "轻松信号（逗号分隔）", value="，".join(p.get("easy_tags", [])), height=68))
+            p["hard_keywords"] = prefs_mod.lists(st.text_area(
+                "强度/避雷关键词（逗号分隔）", value="，".join(p.get("hard_keywords", [])), height=68))
+            if st.button("💾 保存偏好"):
+                st.success(f"已保存：{prefs_mod.save(p)}")
+
+        city_arg_r = None if f_city == "全部" else f_city
+        rows_r = db.query(city=city_arg_r, keyword=f_keyword or None, active_only=active_only,
+                          unexpired_only=unexpired, since_days=since_days, limit=3000)
+        if not rows_r:
+            st.info("暂无数据：先在左侧选城市并点「🚀 立即抓取」。")
+        else:
+            ranked = match.rank(rows_r, p, top=top_n)
+            dfr = pd.DataFrame(ranked)
+            dfr["截止时间"] = dfr.get("deadline", pd.Series(dtype=str)).fillna("")
+            dfr["企业官网"] = dfr.get("official_url", pd.Series(dtype=str)).fillna("")
+            st.caption("打分依据：薪资数字 + 岗位标签/标题关键词（启发式）。**不代表真实工作强度**，仅用于快速初筛，投递前请自行判断。")
+            st.dataframe(
+                dfr[["score", "title", "company", "city", "salary", "s_easy", "s_match", "s_salary",
+                     "reason", "截止时间", "link", "企业官网"]],
+                hide_index=True,
+                column_config={
+                    "score": st.column_config.ProgressColumn("匹配分", min_value=0, max_value=100, format="%d"),
+                    "title": "岗位", "company": "公司", "city": "城市", "salary": "薪资",
+                    "s_easy": st.column_config.NumberColumn("轻松分", format="%d"),
+                    "s_match": st.column_config.NumberColumn("契合分", format="%d"),
+                    "s_salary": st.column_config.NumberColumn("薪资分", format="%d"),
+                    "reason": st.column_config.TextColumn("推荐理由", width="large"),
+                    "截止时间": "截止时间",
+                    "link": st.column_config.LinkColumn("投递（原平台）"),
+                    "企业官网": st.column_config.LinkColumn("企业官网招聘"),
+                },
+                width="stretch", height=620,
+            )
+
+    # ============ 投递工作台 ============
+    with tab3:
         st.warning(AUTOBOT_NOTE)
         scope = st.radio("查看", ["🎯 投递箱（待投）", "✅ 已投记录"], horizontal=True)
         state = 1 if "投递箱" in scope else 2
@@ -221,7 +272,7 @@ def main():
                             st.rerun()
 
     # ============ 我的收藏 ============
-    with tab3:
+    with tab4:
         df_fav = load_df(None, None, active_only, False, True, unexpired, since_days)
         if df_fav.empty:
             st.info("还没有收藏。")
@@ -234,7 +285,7 @@ def main():
                          width="stretch")
 
     # ============ 👤 我的资料 ============
-    with tab4:
+    with tab5:
         st.markdown("#### 👤 我的资料（生成投递材料时使用）")
         st.caption("资料只保存在本机 `data/profile.json`，不上传任何服务器。任何人使用本工具时，在这里换成自己的简历即可。")
         from ihub import profile as prof_mod
@@ -290,7 +341,7 @@ def main():
             st.info("已恢复为内置示例资料（罗广睿）")
 
     # ============ 说明 ============
-    with tab5:
+    with tab6:
         st.markdown("#### 使用说明")
         st.markdown(
             "1. 抓取 → 筛选 → 勾选 🎯投递箱 → 保存；\n"
