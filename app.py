@@ -88,11 +88,14 @@ def main():
             crawler = CRAWLERS[src_name]()
             bar = st.progress(0.0)
             jobs = []
-            for i, c in enumerate(cities, 1):
+            # 多源/RSS 类数据源与城市无关：只跑一次
+            once = any(k in src_name for k in ("多源", "RSS"))
+            targets = ["(全部源)"] if once else cities
+            for i, c in enumerate(targets, 1):
                 with st.spinner(f"抓取 {c}…"):
-                    jobs += crawler.fetch_city(c, max_pages=pages)
-                bar.progress(i / total_cities if (total_cities := len(cities)) else 1)
-            if enrich and jobs:
+                    jobs += crawler.fetch_city(c if not once else "", max_pages=pages)
+                bar.progress(i / max(1, len(targets)))
+            if enrich and jobs and hasattr(crawler, "enrich_deadlines"):
                 with st.spinner("补抓截止时间（详情页）…"):
                     crawler.enrich_deadlines(jobs, cap=min(15, len(jobs)))
             res = db.upsert_jobs(jobs)
