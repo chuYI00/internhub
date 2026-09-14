@@ -1,12 +1,23 @@
 # -*- coding: utf-8 -*-
-"""秋招信息渠道（按用户提供的七大板块整理）+ 各渠道"搜索直达"链接生成。
+"""秋招信息渠道全集（按用户提供的七大板块整理）+ 搜索直达链接生成。
 
-说明：这里只提供**官方/公开入口**与**搜索直达链接**，不代替登录抓取；
-岗位信息以各平台/官网公告为准。
+原则：
+- 只放**官方/公开入口**；公众号类给出微信搜索直达；地方小程序类给出搜索直达；
+- 需登录的平台仅做入口与搜索直达，不代替登录抓取。
 """
 from urllib.parse import quote
 
-# 七大板块：(板块标题, [(名称, 链接), ...])
+
+def wx(kw: str) -> str:
+    """微信公众号文章搜索直达（搜狗微信）。"""
+    return "https://weixin.sogou.com/weixin?type=2&query=" + quote(kw)
+
+
+def bd(kw: str) -> str:
+    """通用网页搜索直达。"""
+    return "https://www.baidu.com/s?wd=" + quote(kw)
+
+
 CHANNEL_GROUPS = [
     ("🏫 本校与目标院校就业网（直达栏目，最该盯）", [
         ("中国民航大学·招聘信息", "https://cauc.bysjy.com.cn/module/careers?menu_id=28135"),
@@ -15,73 +26,106 @@ CHANNEL_GROUPS = [
         ("中国民航大学·校外宣讲会", "https://cauc.bysjy.com.cn/module/careers?type=outer&menu_id=28135"),
         ("中国民航大学·学院招聘信息", "https://cauc.bysjy.com.cn/module/similar_careers?panel_type=23&menu_id=28135"),
         ("中国民航大学·通知公告", "https://cauc.bysjy.com.cn/module/news?type_id=13049&menu_id=28132"),
+        ("中国民航大学就业公众号（微信搜索）", wx("中国民航大学 就业")),
         ("云南大学云就业平台", "https://jobs.ynu.edu.cn/index"),
         ("大理大学就业平台", "https://dldx.jysd.com/"),
         ("昆明理工大学就业网", "http://job.kmust.edu.cn/"),
+        ("提醒", "院系辅导员/班级群通知：竞争范围最小、企业资质经学校审核，务必同步关注"),
     ]),
-    ("🏛️ 国家级官方平台（权威性最高）", [
-        ("国家大学生就业服务平台 24365（教育部）", "https://job.ncss.cn"),
+    ("🏛️ 一、国家级官方平台（权威性最高）", [
+        ("国家大学生就业服务平台 24365（岗位）", "https://job.ncss.cn/student/jobs/index.html"),
         ("24365 主站", "https://www.ncss.cn"),
+        ("24365 微信公众号 ncssfwh（微信搜索）", wx("ncssfwh 国家大学生就业服务平台")),
         ("国聘网（国资委+教育部+人社部）", "https://www.iguopin.com"),
         ("国聘·国资央企招聘专区", "https://cujiuye.iguopin.com"),
-        ("国聘·校招频道", "https://xiaoyuan.iguopin.com"),
+        ("国聘·校园招聘频道", "https://xiaoyuan.iguopin.com"),
         ("中国公共招聘网（人社部）", "http://job.mohrss.gov.cn"),
-        ("国资委官网·人事专栏", "http://www.sasac.gov.cn"),
-        ("国资小新（公众号 guozixiaoxin）", "https://www.baidu.com/s?wd=" + quote("国资小新 央企 校招")),
+        ("国资委官网·人事专栏（政务公开→人事）", "http://www.sasac.gov.cn"),
+        ("国资小新（公众号 guozixiaoxin）", wx("国资小新 央企 校园招聘")),
         ("工信部中小企业百日招聘（中国中小企业服务网）", "https://www.chinasme.cn"),
     ]),
-    ("🏫 校园专属渠道（竞争压力最小）", [
-        ("中国民航大学就业信息网", "https://www.cauc.edu.cn"),
-        ("海投网（宣讲会/双选会汇总）", "https://www.haitou.cc"),
+    ("🏫 二、校园专属渠道（竞争压力最小）", [
+        ("海投网（16地区150+高校宣讲会）", "https://www.haitou.cc"),
+        ("梧桐果（宣讲会/校招）", "https://www.wutongguo.com"),
         ("应届生求职网（宣讲会日历/面经）", "https://www.yingjiesheng.com"),
-        ("梧桐果（宣讲会）", "https://www.wutongguo.com"),
+        ("本校就业信息网（见上方第一板块）", "https://cauc.bysjy.com.cn/"),
+        ("目标城市高校就业网（按城市搜）", bd("2027届 校园招聘 就业信息网 昆明")),
+        ("高校宣讲会日历（按校名搜）", bd("宣讲会 日程 2027届 昆明")),
     ]),
-    ("💼 综合招聘平台（覆盖面广，海投初筛）", [
-        ("应届生求职网", "https://www.yingjiesheng.com"),
+    ("💼 三、综合类招聘平台（海投初筛）", [
+        ("应届生求职网（51job 旗下）", "https://www.yingjiesheng.com"),
         ("智联招聘·校园", "https://xiaoyuan.zhaopin.com"),
         ("前程无忧 51job", "https://www.51job.com"),
-        ("BOSS直聘", "https://www.zhipin.com"),
-        ("实习僧（实习/校招）", "https://www.shixiseng.com"),
-        ("猎聘·校园", "https://campus.liepin.com"),
-        ("拉勾网", "https://www.lagou.com"),
+        ("BOSS直聘（直聊 HR）", "https://www.zhipin.com"),
+        ("实习僧（实习/校招，可转正标签）", "https://www.shixiseng.com"),
+        ("猎聘·校园（中大型企业/外企）", "https://campus.liepin.com"),
+        ("拉勾网（互联网垂直）", "https://www.lagou.com"),
         ("中华英才网", "https://www.chinahr.com"),
+        ("一览英才网（电力/医疗等细分行业）", "https://www.job1001.com"),
     ]),
-    ("🎯 行业垂直渠道（针对性强）", [
+    ("🎯 四、行业垂直渠道", [
         ("牛客网（技术岗/内推/面经）", "https://www.nowcoder.com"),
-        ("中国银行招聘公告", "https://www.boc.cn/aboutboc/bi4/"),
+        ("腾讯招聘（微信搜索）", wx("腾讯招聘 校园招聘")),
+        ("字节跳动校园招聘", "https://jobs.bytedance.com/campus/"),
+        ("阿里巴巴招聘（微信搜索）", wx("阿里巴巴 校园招聘")),
+        ("京东校园招聘（微信搜索）", wx("京东招聘 校园招聘")),
+        ("快手招聘（微信搜索）", wx("快手招聘 校园招聘")),
         ("工商银行招聘", "https://job.icbc.com.cn"),
         ("农业银行招聘", "https://career.abchina.com.cn"),
         ("建设银行招聘", "https://job2.ccb.com"),
+        ("中国银行招聘公告", "https://www.boc.cn/aboutboc/bi4/"),
         ("交通银行招聘", "https://job.bankcomm.com"),
         ("邮储银行招聘", "https://www.psbc.com/cn/gyyc/rczp/xyzp/"),
+        ("宝洁校园招聘（P&G）", "https://www.pgcareers.com"),
+        ("养生堂·农夫山泉校招", "https://jobs.yst.com.cn/campus"),
+        ("英特尔中国校招", "https://chinacampus.jobs.intel.cn"),
+        ("阿斯利康校招（Moka 平台）", "https://app.mokahr.com/campus-recruitment/astrazeneca"),
+        ("ASML 阿斯麦（微信搜索）", wx("ASML 阿斯麦 校园招聘")),
+        ("咨询公司（奥纬等，按名搜）", bd("咨询公司 校园招聘 2027 中国")),
         ("国家电网招聘", "https://zhaopin.sgcc.com.cn"),
         ("中石油招聘", "https://zhaopin.cnpc.com.cn"),
+        ("中国移动招聘", "https://job.10086.cn/personal/campus/"),
+        ("中国联通招聘（搜索）", bd("中国联通 校园招聘 2027")),
+        ("中国电信招聘（搜索）", bd("中国电信 校园招聘 2027")),
         ("中国铁路人才网（18 个铁路局唯一官方）", "https://rczp.china-railway.com.cn"),
         ("军队人才网（文职唯一官方）", "http://81rc.81.cn"),
     ]),
-    ("🗺️ 地方性渠道（回省/下沉就业）", [
-        ("云南省人力资源和社会保障厅", "https://hrss.yn.gov.cn"),
+    ("🗺️ 五、地方性渠道（回省/下沉就业）", [
+        ("云南省人社厅", "https://hrss.yn.gov.cn"),
         ("大理州人民政府（本地公告）", "https://www.dali.gov.cn"),
         ("云南省国资委", "https://gzw.yn.gov.cn"),
-        ("山东人社·乐业山东", "https://hrss.shandong.gov.cn"),
+        ("山东人社·乐业山东（求职招聘）", "https://hrss.shandong.gov.cn"),
         ("潍坊市人力资源和社会保障局", "https://rsj.weifang.gov.cn"),
         ("北京高校大学生就业创业信息网", "https://www.bjbys.net.cn"),
+        ("广东“粤就业”小程序（微信搜索）", wx("粤就业 小程序 高校毕业生")),
+        ("四川“川e就”平台（搜索）", bd("川e就 四川大学生就业服务平台")),
+        ("河南省毕业生就业信息网（搜索）", bd("河南省毕业生就业信息网")),
+        ("浙江省大学生网上就业市场（搜索）", bd("浙江省大学生网上就业市场")),
+        ("内蒙古北疆就业网（搜索）", bd("北疆就业网 内蒙古 大学生")),
+        ("辽宁省大学生智慧就业创业平台（搜索）", bd("辽宁省大学生智慧就业创业平台")),
+        ("当地人社局公众号（微信搜索 潍坊/昆明/大理）", wx("人社局 招聘 事业单位 潍坊 昆明 大理")),
+        ("山东国资 / 广东国资（地方国资委公众号）", wx("山东国资 校园招聘 国企")),
     ]),
-    ("🤝 内推与社交渠道（提高通过率）", [
+    ("🤝 六、内推与社交渠道（提高通过率）", [
+        ("学长学姐/校友内推（院系校友群、求职社团）", bd("中国民航大学 校友 内推 就业")),
+        ("脉脉（学长学姐内推通道）", "https://maimai.cn"),
         ("牛客网·内推帖", "https://www.nowcoder.com"),
-        ("脉脉（学长学姐内推）", "https://maimai.cn"),
+        ("OfferShow 内推群（搜索）", bd("OfferShow 内推群 校招")),
+        ("知乎“企业名+内推”（搜索）", bd("秋招 内推 央国企 知乎")),
         ("LinkedIn 领英（外企/校友）", "https://www.linkedin.com"),
-        ("OfferShow 内推群（搜索）", "https://www.baidu.com/s?wd=" + quote("OfferShow 内推群 校招")),
     ]),
-    ("📢 社群与信息聚合（信息差）", [
+    ("📢 七、社群与信息聚合（信息差加速器）", [
+        ("大厂官方校招群（腾讯/字节校园大使）", wx("校园大使 校招群 内推码")),
+        ("国企央企校招群（地方国资委公众号）", wx("国资 校招群 内推")),
+        ("垂直行业社群（AI/运营等）", wx("AI 求职 社群 内推")),
+        ("知乎“求职数据通”", "https://www.zhihu.com"),
         ("校招信息管理平台（offer情报局）", "https://offerqingbaoju.cn"),
         ("2027秋招企业汇总表（givemeoc）", "https://www.givemeoc.com"),
-        ("2027届秋招国企汇总（百度直达）", "https://www.baidu.com/s?wd=" + quote("2027届 秋招 国企 汇总表")),
-        ("知乎（求职经验/内推）", "https://www.zhihu.com"),
+        ("2027届秋招国企汇总（搜索）", bd("2027届 秋招 国企 汇总表")),
     ]),
 ]
 
-# 便于"搜索直达"的平台（用百度站内/关键词方式，无需登录也能看到公告）
+# 便于"搜索直达"的平台（百度站内搜索方式，无需登录也能看到公告）
 SEARCH_SITES = [
     ("国聘（iguopin）", "site:iguopin.com"),
     ("24365 国家大学生就业服务平台", "site:ncss.cn"),
@@ -93,6 +137,7 @@ SEARCH_SITES = [
     ("牛客网", "site:nowcoder.com"),
     ("应届生求职网", "site:yingjiesheng.com"),
     ("高校就业信息网（.edu.cn）", "site:edu.cn"),
+    ("政府/人社公告（.gov.cn）", "site:gov.cn"),
 ]
 
 
@@ -103,5 +148,6 @@ def search_links(city: str = "", keyword: str = "", year: str = "2027届") -> li
     out = [("百度（全网）", f"https://www.baidu.com/s?wd={quote(q)}")]
     for name, site in SEARCH_SITES:
         out.append((f"{name} 搜索", f"https://www.baidu.com/s?wd={quote(site + ' ' + q)}"))
+    out.append(("微信公众号（国资小新/央企校招）", wx(q)))
     out.append(("B站（备考/经验）", f"https://search.bilibili.com/all?keyword={quote(q + ' 笔试 面试')}"))
     return out
