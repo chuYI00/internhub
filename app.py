@@ -128,8 +128,10 @@ def main():
     if s["fake"]:
         st.warning(f"已标记 {s['fake']} 条疑似风险岗位，可在侧边栏勾选“只看风险标记”核对。")
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
-        ["岗位列表", "🏆 为你推荐", "🎯 投递工作台", "我的收藏", "👤 我的资料", "📮 网申跟踪", "说明与合规"])
+    (tab1, tab2, tab3, tab4, tab5, tab6,
+     tab7, tab8, tab9) = st.tabs(
+        ["岗位列表", "🏆 为你推荐", "🎯 投递工作台", "我的收藏", "👤 我的资料", "📮 网申跟踪",
+         "🛰 秋招渠道", "📚 备考方案", "说明与合规"])
 
     # ============ 岗位列表 ============
     with tab1:
@@ -438,8 +440,121 @@ def main():
                 db.app_delete(int(del_id))
                 st.rerun()
 
-    # ============ 说明 ============
+    # ============ 🛰 秋招渠道 ============
     with tab7:
+        st.markdown("#### 🛰 秋招渠道与岗位（找全 + 直达官方报名）")
+        from ihub import campus_channels as cc
+
+        st.markdown("**① 秋招岗位库**（本工具已收录的秋招岗位，含官方报名入口）")
+        cq1, cq2 = st.columns([1, 1])
+        qcity = cq1.selectbox("城市", ["全部", "潍坊", "昆明", "大理", "全国"], key="cq_city")
+        qkw = cq2.text_input("关键词（公司/岗位，可空）", key="cq_kw")
+        q_rows = db.query(city=None if qcity == "全部" else qcity,
+                          keyword=qkw or None, job_type="秋招",
+                          active_only=False, limit=500)
+        if not q_rows:
+            st.info("秋招岗位库暂无数据：可在「📚 备考方案」上方用“导入秋招 CSV”或用下面渠道自己找（找到后可按模板导入）。")
+        else:
+            import pandas as _pd
+            qdf = _pd.DataFrame(q_rows)
+            qdf["报名入口"] = qdf["official_url"].fillna("").where(qdf["official_url"].fillna("") != "", qdf["link"])
+            qdf["截止"] = qdf["deadline"].fillna("")
+            st.dataframe(
+                qdf[["company", "title", "city", "batch", "degree", "截止", "报名入口", "source"]],
+                hide_index=True,
+                column_config={
+                    "company": "单位", "title": "岗位", "city": "城市", "batch": "届别",
+                    "degree": "学历", "截止": "截止日期",
+                    "报名入口": st.column_config.LinkColumn("官方报名/公告"),
+                    "source": "来源",
+                },
+                width="stretch", height=320,
+            )
+            if st.button("⬇️ 把上面这些秋招岗位加入「📮 网申跟踪」"):
+                n = db.app_add_from_job_ids([r["id"] for r in q_rows])
+                st.success(f"已加入 {n} 条（重复自动跳过），去「📮 网申跟踪」维护进度")
+
+        st.divider()
+        st.markdown("**② 一键搜索直达**（把城市/关键词组合，直接跳到各平台的秋招结果页）")
+        s1, s2 = st.columns([1, 2])
+        scity = s1.selectbox("搜索城市", ["潍坊", "昆明", "大理", "全国", "山东", "云南"], key="srch_city")
+        skw = s2.text_input("搜索关键词（专业方向/岗位，如 物联网、电气、信息科技）", value="物联网", key="srch_kw")
+        links = cc.search_links(city="" if scity == "全国" else scity, keyword=skw)
+        cols = st.columns(3)
+        for i, (name, url) in enumerate(links):
+            cols[i % 3].markdown(f"- [{name}]({url})")
+
+        st.divider()
+        st.markdown("**③ 七大渠道官方入口**（点开即到官方/公开页面）")
+        for title, items in cc.CHANNEL_GROUPS:
+            with st.expander(title, expanded=False):
+                c = st.columns(2)
+                for i, (name, url) in enumerate(items):
+                    c[i % 2].markdown(f"- [{name}]({url})")
+        st.caption("提示：BOSS/智联/牛客等需登录后查看；本页只提供官方入口与搜索直达，不代替登录抓取。")
+
+    # ============ 📚 备考方案 ============
+    with tab8:
+        st.markdown("#### 📚 备考方案（选目标岗位 → 自动出方案）")
+        from ihub import study
+        tname = st.selectbox("我要备考的目标", list(study.TARGETS.keys()), key="study_target")
+        d = study.TARGETS[tname]
+        st.info(d["note"])
+        st.markdown("**考什么**：" + "　".join(f"`{s}`" for s in d["subjects"]))
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown("**🎬 看什么课**")
+            for name, url in d["courses"]:
+                st.markdown(f"- [{name}]({url})")
+        with c2:
+            st.markdown("**✍️ 哪里刷题**")
+            for name, url in list(d["practice"]) + list(study.COMMON_PRACTICE):
+                st.markdown(f"- [{name}]({url})")
+        with c3:
+            st.markdown("**🔗 官方信息源**")
+            for name, url in list(d["official"]) + list(study.COMMON_OFFICIAL):
+                st.markdown(f"- [{name}]({url})")
+
+        st.markdown("**🗓 复习时间表**")
+        import pandas as _pd2
+        st.dataframe(_pd2.DataFrame(study.TIME_PLAN, columns=["阶段", "做什么"]),
+                     hide_index=True, width="stretch")
+
+        st.markdown("**💬 面试准备**")
+        for it in study.INTERVIEW:
+            st.markdown(f"- {it}")
+
+        st.divider()
+        st.markdown("**✅ 打卡（本地保存，按目标分别记录）**")
+        checks = study.load_checks()
+        cur = dict(checks.get(tname, {}))
+        changed = False
+        for i, it in enumerate(study.CHECK_ITEMS):
+            v = st.checkbox(it, value=bool(cur.get(str(i), False)), key=f"chk_{tname}_{i}")
+            if v != bool(cur.get(str(i), False)):
+                cur[str(i)] = v
+                changed = True
+        if changed:
+            checks[tname] = cur
+            study.save_checks(checks)
+            st.caption("已保存进度 ✅")
+
+        st.divider()
+        st.markdown("**➕ 导入新的秋招岗位（自己找到的公告也可入库）**")
+        st.caption("CSV 表头：岗位,公司,城市,学历,标签,链接,截止日期,描述,岗位类型(填“秋招”),届别,来源")
+        upl = st.file_uploader("上传秋招 CSV", type=["csv"], key="csv_qiu")
+        if upl is not None:
+            import io as _io
+            rows = _io.BytesIO(upl.read())
+            txt = rows.getvalue().decode("utf-8-sig", "ignore")
+            tmp = os.path.join(config.PROJECT_ROOT, "_upload_秋招.csv")
+            with open(tmp, "w", encoding="utf-8-sig") as f:
+                f.write(txt)
+            st.success(f"已保存到 {tmp}，在终端执行：python run_import.py \"{tmp}\" --source 秋招调研")
+
+    # ============ 说明 ============
+    with tab9:
         st.markdown("#### 使用说明")
         st.markdown(
             "1. 抓取 → 筛选 → 勾选 🎯投递箱 → 保存；\n"
