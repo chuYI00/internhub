@@ -364,6 +364,18 @@ def main():
             st.info("已恢复为内置示例资料（罗广睿）")
 
         st.divider()
+        st.markdown("#### 📥 采集助手（把国聘 / 24365 / BOSS / 牛客等你已登录页面的岗位导出 CSV）")
+        st.caption("为什么需要它：国家平台与商业平台都要登录、接口带签名，脚本抓不到；"
+                   "但用**你自己已登录的浏览器**点一下按钮，就能把当前页面上的岗位导出成 CSV，再导入本工具统一管理。")
+        if st.button("⬇️ 生成/更新 采集助手.user.js"):
+            from ihub import collector
+            path = collector.save_userscript()
+            st.success(f"已生成：{path}")
+        st.markdown("**用法**：① 已有 Tampermonkey（油猴）扩展 → ② 把这个 .user.js 拖进浏览器安装 → "
+                    "③ 打开国聘/24365/BOSS/牛客的岗位列表页（登录状态、滚动加载完）→ ④ 点右下角 "
+                    "**「📥 采集本页岗位」** 导出 CSV → ⑤ 到「📚 备考方案」页底部上传该 CSV，一键入库。")
+
+        st.divider()
         st.markdown("#### 🧩 网申自动填写助手（解决秋招网申一个个填很慢）")
         st.caption("原理：用你本机的资料生成一个**浏览器用户脚本**，在任意公司网申页面右下角出现「📝 填入我的资料」按钮，"
                    "点击后自动把姓名/手机/邮箱/学校/专业/毕业时间/GPA/自我评价等填进匹配的输入框（蓝框=已填），你核对后再自己提交。"
@@ -544,17 +556,18 @@ def main():
             st.caption("已保存进度 ✅")
 
         st.divider()
-        st.markdown("**➕ 导入新的秋招岗位（自己找到的公告也可入库）**")
-        st.caption("CSV 表头：岗位,公司,城市,学历,标签,链接,截止日期,描述,岗位类型(填“秋招”),届别,来源")
-        upl = st.file_uploader("上传秋招 CSV", type=["csv"], key="csv_qiu")
+        st.markdown("**➕ 导入新的秋招岗位（自己找到的公告 / 采集助手导出的 CSV 都行）**")
+        st.caption("CSV 表头（缺列也不影响）：岗位,公司,城市,学历,标签,链接,截止日期,描述,岗位类型(填“秋招”),届别,来源")
+        upl = st.file_uploader("上传秋招 CSV（采集助手导出的文件直接传这里）", type=["csv"], key="csv_qiu")
         if upl is not None:
-            import io as _io
-            rows = _io.BytesIO(upl.read())
-            txt = rows.getvalue().decode("utf-8-sig", "ignore")
-            tmp = os.path.join(config.PROJECT_ROOT, "_upload_秋招.csv")
-            with open(tmp, "w", encoding="utf-8-sig") as f:
-                f.write(txt)
-            st.success(f"已保存到 {tmp}，在终端执行：python run_import.py \"{tmp}\" --source 秋招调研")
+            txt = upl.read().decode("utf-8-sig", "ignore")
+            from ihub import importer as _imp
+            stt = _imp.import_csv_text(txt, source="采集导入")
+            if stt["rows"]:
+                st.success(f"已导入 {stt['rows']} 行 → 新增 {stt['inserted']} / 更新 {stt['updated']}"
+                           f"（识别到的列：{'、'.join(stt['mapping'].keys())}）")
+            else:
+                st.warning("没识别到“岗位”列：请确认表头含“岗位/职位/岗位名称”等列名")
 
     # ============ 说明 ============
     with tab9:
