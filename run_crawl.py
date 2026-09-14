@@ -24,8 +24,10 @@ def main():
     crawler = crawler_cls()
     print(f"抓取源：{args.source} | 城市：{cities} | 页数：{args.pages}")
     t0 = time.time()
-    jobs = crawler.crawl(cities, max_pages=args.pages)
-    if args.enrich and jobs:
+    # 多源 / RSS 类数据源与城市无关：只跑一次
+    once = any(k in args.source for k in ("多源", "RSS"))
+    jobs = crawler.crawl([""] if once else cities, max_pages=args.pages)
+    if args.enrich and jobs and hasattr(crawler, "enrich_deadlines"):
         print(f"补充抓取详情页截止时间（前 {min(args.enrich, len(jobs))} 条）…")
         crawler.enrich_deadlines(jobs, cap=args.enrich)
     res = db.upsert_jobs(jobs)

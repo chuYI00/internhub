@@ -18,6 +18,7 @@ import json
 import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 
@@ -25,6 +26,10 @@ from .. import config
 from .base import BaseCrawler
 
 SOURCES_PATH = os.path.join(config.DATA_DIR, "sources.json")
+
+PER_SOURCE_TIMEOUT = 10      # 单源超时（秒）
+PER_SOURCE_MAX_ITEMS = 60    # 单源最多取多少条
+MAX_WORKERS = 6              # 并发抓取源数量
 
 TAG_RE = re.compile(r"<[^>]+>")
 A_RE = re.compile(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', flags=re.S | re.I)
@@ -43,9 +48,12 @@ def _text(html_fragment):
     return re.sub(r"\s+", " ", TAG_RE.sub("", html_fragment)).strip()
 
 
-CITY_HINTS = ["潍坊", "济南", "青岛", "烟台", "威海", "昆明", "大理", "曲靖", "玉溪",
-              "北京", "上海", "深圳", "广州", "成都", "杭州", "南京", "武汉", "西安", "重庆"]
+CITY_HINTS = ["潍坊", "济南", "青岛", "烟台", "威海", "昆明", "大理", "曲靖", "玉溪", "丽江",
+              "北京", "上海", "深圳", "广州", "成都", "杭州", "南京", "武汉", "西安", "重庆",
+              "天津", "长沙", "合肥", "郑州", "苏州", "无锡", "宁波", "厦门", "福州", "南昌",
+              "雄安", "石家庄", "太原", "沈阳", "大连", "哈尔滨", "长春", "兰州", "贵阳", "南宁"]
 NOISE_TITLES = ["取消宣讲", "场地变更", "时间变更", "已过期", "查看更多", "首页", "注册", "登录"]
+NOISE_PATTERNS = ["{{", "}}", "javascript:"]
 
 
 def _clean_title(t: str) -> str:
@@ -61,6 +69,8 @@ def _is_meaningful(t: str) -> bool:
     if len(re.findall(r"[\u4e00-\u9fa5]", t)) < 4:                 # 至少 4 个汉字
         return False
     if any(n in t for n in NOISE_TITLES):
+        return False
+    if any(p in t for p in NOISE_PATTERNS):                        # JS 模板残留等
         return False
     return True
 
@@ -78,37 +88,45 @@ class WebListCrawler(BaseCrawler):
     name = "网页列表(多源)"
 
     def fetch_city(self, city, max_pages=1, verbose=True):
-        jobs = []
-        sources = [s for s in load_sources() if s.get("enabled", True)]
+        """并发抓取所有启用的源（互不阻塞），单源超时/限条数。"""
+        sources = [s for s in load_sources() if s.get("enabled", True) and s.get("url")]
         if not sources:
             if verbose:
                 print(f"  [提示] 未配置数据源：请编辑 {SOURCES_PATH}")
-            return jobs
-        for s in sources:
-            url = s.get("url")
-            if not url:
-                continue
-            if verbose:
-                print(f"  [源] {s.get('name')} → {url}")
-            try:
-                r = requests.get(url, headers={"User-Agent": config.USER_AGENT},
-                                 timeout=config.TIMEOUT)
-                r.encoding = r.apparent_encoding or "utf-8"
-                html = r.text
-            except Exception as e:
-                print(f"    [失败] {e}")
-                continue
-            items = self._parse(html, s, url)
-            if verbose:
-                print(f"    解析 {len(items)} 条")
-            jobs.extend(items)
-            self._throttle()
+            return []
+        if verbose:
+            print(f"  [多源] 并发抓取 {len(sources)} 个源（并发 {MAX_WORKERS}，单源超时 {PER_SOURCE_TIMEOUT}s）")
+        jobs = []
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
+            futures = {ex.submit(self._fetch_one, s): s for s in sources}
+            for fut in as_completed(futures):
+                s = futures[fut]
+                try:
+                    items = fut.result()
+                except Exception as e:
+                    if verbose:
+                        print(f"    [失败] {s.get('name')}: {str(e)[:60]}")
+                    continue
+                if verbose:
+                    print(f"    [完成] {s.get('name')}: {len(items)} 条")
+                jobs.extend(items)
         return jobs
+
+    def _fetch_one(self, s):
+        url = s["url"]
+        r = requests.get(url, headers={"User-Agent": config.USER_AGENT},
+                         timeout=(6, PER_SOURCE_TIMEOUT))
+        r.encoding = r.apparent_encoding or "utf-8"
+        html = r.text[:400_000]
+        items = self._parse(html, s, url)
+        cap = int(s.get("max_items") or PER_SOURCE_MAX_ITEMS)
+        return items[:cap]
 
     def _parse(self, html, s, page_url):
         out = []
         link_re = re.compile(s["link_regex"]) if s.get("link_regex") else None
         kw_re = re.compile(s["keyword_regex"]) if s.get("keyword_regex") else None
+        ex_re = re.compile(s["exclude_keyword_regex"]) if s.get("exclude_keyword_regex") else None
         base = s.get("base") or ""
         seen = set()
         for href, inner in A_RE.findall(html):
@@ -118,6 +136,8 @@ class WebListCrawler(BaseCrawler):
             if link_re and not link_re.search(href):
                 continue
             if kw_re and not kw_re.search(title):
+                continue
+            if ex_re and ex_re.search(title):                     # 排除关键词（如医疗类公告）
                 continue
             # 相对链接补全
             full = href
