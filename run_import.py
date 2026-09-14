@@ -22,6 +22,9 @@ HEADER_ALIAS = {
     "link": ["链接", "投递链接", "报名链接", "官网链接", "url", "link", "申请链接"],
     "deadline": ["截止", "截止时间", "截止日期", "deadline", "报名截止"],
     "description": ["描述", "要求", "岗位要求", "描述要求", "description"],
+    "job_type": ["岗位类型", "类型", "招聘类型", "job_type", "实习/秋招"],
+    "batch": ["届别", "毕业届", "招聘届别", "batch", "面向届别"],
+    "source_name": ["来源", "来源渠道", "source"],
 }
 
 
@@ -67,7 +70,7 @@ def main():
         link = g("link")
         dedup = hashlib.md5(f"{title}|{g('company')}|{g('city')}|{link}".encode("utf-8")).hexdigest()[:16]
         jobs.append({
-            "source": args.source,
+            "source": g("source_name") or args.source,
             "job_id": dedup,
             "title": title,
             "company": g("company"),
@@ -82,6 +85,8 @@ def main():
             "deadline": g("deadline"),
             "published_at": "",
             "description": g("description"),
+            "job_type": g("job_type") or "实习",
+            "batch": g("batch"),
         })
     res = db.upsert_jobs(jobs)
     print(f"读取 {len(jobs)} 行 → 新增 {res['inserted']} / 更新 {res['updated']} / 疑似风险 {res['flagged']}")

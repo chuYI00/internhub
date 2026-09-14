@@ -34,11 +34,25 @@ CREATE TABLE IF NOT EXISTS jobs (
     apply_state INTEGER DEFAULT 0, -- 投递状态：0=未投；1=投递箱(待投)；2=已投
     apply_note TEXT DEFAULT '',  -- 针对该岗位生成的投递理由
     official_url TEXT DEFAULT '', -- 企业官方招聘入口（核验/直达用，可空）
+    job_type TEXT DEFAULT '实习', -- 实习 / 秋招 / 校招
+    batch TEXT DEFAULT '',        -- 届别，如 2027届
     dedup_key TEXT               -- 跨平台去重键（预留）
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_src_job ON jobs(source, job_id);
 CREATE INDEX IF NOT EXISTS idx_city ON jobs(city);
 CREATE INDEX IF NOT EXISTS idx_active ON jobs(is_active);
+
+-- 网申跟踪表（秋招/实习投递进度）
+CREATE TABLE IF NOT EXISTS applications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_ref INTEGER,                 -- 关联 jobs.id（手动添加时为空）
+    company TEXT, title TEXT, city TEXT, url TEXT,
+    job_type TEXT DEFAULT '秋招',
+    stage TEXT DEFAULT '未投',        -- 未投/已投/笔试/面试/Offer/未通过
+    deadline TEXT, applied_at TEXT, updated_at TEXT,
+    note TEXT DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_app_stage ON applications(stage);
 """
 
 
@@ -76,7 +90,8 @@ def init_db():
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(jobs)").fetchall()}
     for col, decl in (("deadline", "TEXT"), ("published_at", "TEXT"),
                       ("apply_state", "INTEGER DEFAULT 0"), ("apply_note", "TEXT DEFAULT ''"),
-                      ("official_url", "TEXT DEFAULT ''")):
+                      ("official_url", "TEXT DEFAULT ''"), ("job_type", "TEXT DEFAULT '实习'"),
+                      ("batch", "TEXT DEFAULT ''")):
         if col not in cols:
             conn.execute(f"ALTER TABLE jobs ADD COLUMN {col} {decl}")
     # 迁移完成后才建涉及新列的索引
@@ -104,6 +119,8 @@ def upsert_jobs(jobs: list) -> dict:
                 (j.get("source", "实习僧"), job_id))
             row = cur.fetchone()
             official = str(j.get("official_url") or "") or channels.official_for(str(j.get("company") or ""))
+            jtype = str(j.get("job_type") or "实习")
+            batch = str(j.get("batch") or "")
             vals = (
                 j.get("source", "实习僧"), job_id, j.get("title"), j.get("company"),
                 j.get("city"), j.get("salary"), j.get("salary_min"), j.get("salary_max"),
@@ -111,6 +128,7 @@ def upsert_jobs(jobs: list) -> dict:
                 j.get("link"), now, now,
                 1, int(is_fake), reason, 0,
                 j.get("deadline"), j.get("published_at"), official,
+                jtype, batch,
                 j.get("dedup_key"),
             )
             if row is None:
@@ -118,8 +136,8 @@ def upsert_jobs(jobs: list) -> dict:
                     """INSERT INTO jobs (source, job_id, title, company, city, salary,
                        salary_min, salary_max, degree, duration, tags, industry, link,
                        fetched_at, updated_at, is_active, is_fake, fake_reason, favorite,
-                       deadline, published_at, official_url, dedup_key)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", vals)
+                       deadline, published_at, official_url, job_type, batch, dedup_key)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", vals)
                 res["inserted"] += 1
             else:
                 # 已有记录：更新内容；风险标记取“任一来源判定为风险”则标风险
@@ -130,12 +148,15 @@ def upsert_jobs(jobs: list) -> dict:
                        deadline = COALESCE(?, deadline),
                        published_at = COALESCE(?, published_at),
                        official_url = COALESCE(?, official_url),
+                       job_type = CASE WHEN ?!='' THEN ? ELSE job_type END,
+                       batch = CASE WHEN ?!='' THEN ? ELSE batch END,
                        is_fake = MAX(is_fake, ?), fake_reason = CASE WHEN is_fake=1 THEN fake_reason ELSE ? END
                        WHERE source=? AND job_id=?""",
                     (j.get("title"), j.get("company"), j.get("city"), j.get("salary"),
                      j.get("salary_min"), j.get("salary_max"), j.get("degree"),
                      j.get("duration"), j.get("tags"), j.get("industry"), j.get("link"),
                      now, j.get("deadline"), j.get("published_at"), official,
+                     jtype, jtype, batch, batch,
                      int(is_fake), reason, j.get("source", "实习僧"), job_id))
                 res["updated"] += 1
             if is_fake:
@@ -149,13 +170,17 @@ def upsert_jobs(jobs: list) -> dict:
 
 def query(city=None, keyword=None, active_only=True, fake_only=False,
           favorite_only=False, unexpired_only=False, since_days=None,
-          apply_state=None, limit=2000, order="id DESC"):
-    """查询岗位；city/keyword 支持包含匹配。apply_state: 0未投/1待投/2已投/None不限。"""
+          apply_state=None, job_type=None, limit=2000, order="id DESC"):
+    """查询岗位；city/keyword 支持包含匹配。apply_state: 0未投/1待投/2已投/None不限。
+    job_type: 实习/秋招/校招/None不限。"""
     conn = connect()
     sql = "SELECT * FROM jobs WHERE 1=1"
     params = []
     if active_only:
         sql += " AND is_active=1"
+    if job_type and job_type != "全部":
+        sql += " AND job_type=?"
+        params.append(job_type)
     if fake_only:
         sql += " AND is_fake=1"
     if favorite_only:
@@ -229,3 +254,100 @@ def set_apply_note(job_id, note):
     conn.execute("UPDATE jobs SET apply_note=? WHERE id=?", (note, job_id))
     conn.commit()
     conn.close()
+
+
+# ==================== 网申跟踪 ====================
+STAGES = ["未投", "已投", "笔试", "面试", "Offer", "未通过"]
+
+
+def app_add(company="", title="", city="", url="", job_type="秋招", deadline="", note="", job_ref=None):
+    conn = connect()
+    now = now_str()
+    cur = conn.execute(
+        """INSERT INTO applications (job_ref, company, title, city, url, job_type, stage,
+           deadline, applied_at, updated_at, note) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+        (job_ref, company, title, city, url, job_type, "未投", deadline, "", now, note))
+    conn.commit()
+    new_id = cur.lastrowid
+    conn.close()
+    return new_id
+
+
+def app_add_from_job_ids(ids):
+    """把岗位库里的岗位批量加入网申跟踪（已存在的跳过）。"""
+    conn = connect()
+    now = now_str()
+    added = 0
+    for jid in ids:
+        row = conn.execute("SELECT * FROM jobs WHERE id=?", (jid,)).fetchone()
+        if not row:
+            continue
+        exists = conn.execute("SELECT id FROM applications WHERE job_ref=?", (jid,)).fetchone()
+        if exists:
+            continue
+        conn.execute(
+            """INSERT INTO applications (job_ref, company, title, city, url, job_type, stage,
+               deadline, applied_at, updated_at, note) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (jid, row["company"], row["title"], row["city"], row["official_url"] or row["link"],
+             row["job_type"] or "实习", "未投", row["deadline"] or "", "", now, ""))
+        added += 1
+    conn.commit()
+    conn.close()
+    return added
+
+
+def app_list(stage=None, keyword=None, limit=1000):
+    conn = connect()
+    sql = "SELECT * FROM applications WHERE 1=1"
+    params = []
+    if stage and stage != "全部":
+        sql += " AND stage=?"
+        params.append(stage)
+    if keyword:
+        like = f"%{keyword}%"
+        sql += " AND (company LIKE ? OR title LIKE ? OR city LIKE ? OR note LIKE ?)"
+        params += [like, like, like, like]
+    sql += " ORDER BY CASE stage WHEN '未投' THEN 0 WHEN '已投' THEN 1 WHEN '笔试' THEN 2 WHEN '面试' THEN 3 ELSE 4 END, id DESC LIMIT ?"
+    params.append(limit)
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def app_update(app_id, stage=None, deadline=None, note=None, url=None):
+    conn = connect()
+    now = now_str()
+    sets, params = ["updated_at=?"], [now]
+    if stage is not None:
+        sets.append("stage=?")
+        params.append(stage)
+        if stage != "未投":
+            sets.append("applied_at=COALESCE(NULLIF(applied_at,''), ?)")
+            params.append(now[:10])
+        else:
+            sets.append("applied_at=''")
+    for col, val in (("deadline", deadline), ("note", note), ("url", url)):
+        if val is not None:
+            sets.append(f"{col}=?")
+            params.append(val)
+    params.append(app_id)
+    conn.execute(f"UPDATE applications SET {', '.join(sets)} WHERE id=?", params)
+    conn.commit()
+    conn.close()
+
+
+def app_delete(app_id):
+    conn = connect()
+    conn.execute("DELETE FROM applications WHERE id=?", (app_id,))
+    conn.commit()
+    conn.close()
+
+
+def app_stats():
+    conn = connect()
+    rows = conn.execute("SELECT stage, COUNT(*) c FROM applications GROUP BY stage").fetchall()
+    conn.close()
+    out = {s: 0 for s in STAGES}
+    for r in rows:
+        out[r["stage"]] = r["c"]
+    return out

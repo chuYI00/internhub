@@ -69,6 +69,53 @@ def intent_line(job) -> str:
     return f"应聘 {target}　|　{prof.get('intent') or INTENT[detect_direction(job)]}"
 
 
+# 技能/要求词表（用于 JD 匹配与差距分析，可按需扩充）
+VOCAB = [
+    # 技术
+    "物联网", "嵌入式", "单片机", "硬件", "电子", "通信", "计算机", "软件", "测试", "数据",
+    "数据库", "算法", "人工智能", "大模型", "机器学习", "网络", "运维", "技术支持", "产品",
+    "数据分析", "数据采集", "接口", "脚本", "提示词", "需求", "文档", "项目管理", "系统",
+    "自动化", "电气", "控制", "云计算", "前端", "后端", "小程序", "安全", "民航", "机场",
+    # 工具/语言
+    "Python", "C++", "C语言", "Java", "SQL", "Excel", "PPT", "Linux", "Git", "MQTT", "Docker",
+    "STM32", "OpenHarmony", "ROS", "SQLite", "Streamlit", "LangChain", "Figma", "PS", "剪映",
+    # 通用能力
+    "沟通", "协作", "抗压", "责任心", "学习能力", "执行", "逻辑", "细心", "服务意识",
+    "新媒体", "内容", "视频", "剪辑", "设计", "运营", "市场", "销售", "客服", "财务", "人力", "行政",
+]
+
+
+def jd_analysis(jd_text: str, prof=None):
+    """返回 (简历已覆盖的岗位要求, 岗位要求但简历未体现的)——用于精准贴合 + 诚实提示差距。"""
+    prof = prof or profile_mod.load()
+    jd = (jd_text or "").lower()
+    if not jd.strip():
+        return [], []
+    mine = " ".join([
+        str(prof.get("skills") or ""), str(prof.get("highlights") or ""),
+        str(prof.get("experiences") or ""), str(prof.get("certificates") or ""),
+        str(prof.get("major") or ""), str(prof.get("degree") or ""),
+        str(prof.get("self_eval") or ""),
+    ]).lower()
+    # 词表命中 + JD 里的英文术语
+    jd_terms = [v for v in VOCAB if v.lower() in jd]
+    jd_terms += [t for t in re.findall(r"[A-Za-z][A-Za-z0-9+#./\-]{2,14}", jd_text or "")]
+    seen, ordered = set(), []
+    for t in jd_terms:
+        if t.lower() not in seen:
+            seen.add(t.lower()); ordered.append(t)
+    hit = [t for t in ordered if t.lower() in mine]
+    miss = [t for t in ordered if t not in hit]
+    return hit[:20], miss[:20]
+
+
+def _sort_by_jd(items, hit_keywords):
+    """把与 JD 关键词重合度高的条目排前面（不新增内容，只重排，保证真实）。"""
+    def score(s):
+        return sum(1 for k in hit_keywords if k.lower() in str(s).lower())
+    return sorted(items, key=score, reverse=True)
+
+
 def apply_message(job) -> str:
     prof = profile_mod.load()
     t = str(job.get("title") or "该岗位").strip()
@@ -89,7 +136,9 @@ def safe_name(s: str) -> str:
 _simplify_path_safe = safe_name
 
 
-def build_docx(job, out_path: str) -> str:
+def build_docx(job, out_path: str, jd_text: str = None) -> str:
+    """生成按岗位定制的简历；jd_text 传入岗位 JD 时，会把简历里与该岗位相关的
+    亮点/技能排到前面（只重排、不编造），让 HR 一眼看到最相关的信息。"""
     from docx import Document
     from docx.shared import Pt, Cm, RGBColor
     from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -97,6 +146,9 @@ def build_docx(job, out_path: str) -> str:
     from docx.oxml.ns import qn
 
     prof = profile_mod.load()
+    hit_kws, _miss = ([], [])
+    if jd_text:
+        hit_kws, _miss = jd_analysis(jd_text, prof)
     doc = Document()
     sec = doc.sections[0]
     sec.top_margin = sec.bottom_margin = Cm(1.2)
@@ -158,11 +210,17 @@ def build_docx(job, out_path: str) -> str:
         bullet("英语：", prof["english"])
 
     heading("岗位匹配亮点")
-    for h in highlights_for(job, prof):
+    hl_list = highlights_for(job, prof)
+    if hit_kws:
+        hl_list = _sort_by_jd(hl_list, hit_kws)
+    for h in hl_list:
         bullet("", h)
 
     heading("实践经历")
-    for line in profile_mod.lines(prof.get("experiences")):
+    exp_lines = profile_mod.lines(prof.get("experiences"))
+    if hit_kws:
+        exp_lines = _sort_by_jd(exp_lines, hit_kws)
+    for line in exp_lines:
         title, rng, desc = profile_mod.parse_experience(line)
         p = doc.add_paragraph(); p.paragraph_format.space_after = Pt(1)
         setf(p.add_run(f"▎{title}"), 10.5, True)
@@ -174,7 +232,10 @@ def build_docx(job, out_path: str) -> str:
             setf(pp.add_run(desc), 10)
 
     heading("技能与证书")
-    for s in profile_mod.lines(prof.get("skills")):
+    skill_lines = profile_mod.lines(prof.get("skills"))
+    if hit_kws:
+        skill_lines = _sort_by_jd(skill_lines, hit_kws)
+    for s in skill_lines:
         bullet("", s)
     if prof.get("certificates"):
         bullet("证书：", prof["certificates"])

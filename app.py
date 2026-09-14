@@ -35,10 +35,11 @@ def _display_df(rows):
 
 
 def load_df(city, keyword, active_only, fake_only, favorite_only,
-            unexpired_only, since_days):
+            unexpired_only, since_days, job_type=None):
     rows = db.query(city=city, keyword=keyword, active_only=active_only,
                     fake_only=fake_only, favorite_only=favorite_only,
-                    unexpired_only=unexpired_only, since_days=since_days)
+                    unexpired_only=unexpired_only, since_days=since_days,
+                    job_type=job_type)
     return _display_df(rows)
 
 
@@ -57,11 +58,11 @@ def export_box_csv():
     return path
 
 
-def gen_resume_for(job):
+def gen_resume_for(job, jd_text=None):
     from ihub import resume
-    safe = resume._simplify_path_safe(str(job.get("company") or "") + "_" + str(job.get("title") or ""))
+    safe = resume.safe_name(str(job.get("company") or "") + "_" + str(job.get("title") or ""))
     path = os.path.join(OUT_DIR, f"{safe}_简历.docx")
-    return resume.build_docx(job, path)
+    return resume.build_docx(job, path, jd_text=jd_text)
 
 
 def main():
@@ -101,8 +102,12 @@ def main():
         st.divider()
         st.header("② 筛选")
         city_choices = list(dict.fromkeys(["全部"] + config.PROVINCE_LABELS + sorted(db.distinct_cities())))
-        f_city = st.selectbox("按地区筛选（支持省份，如“山东”）", city_choices)
-        f_keyword = st.text_input("关键词（岗位/公司/标签）", placeholder="例如：AIGC / 新媒体 / 嵌入式")
+        quick = st.radio("快速锁定城市（秋招用）", ["不限", "潍坊", "昆明", "大理"], horizontal=True)
+        f_city = st.selectbox("按地区筛选（支持省份，如“山东/云南”）", city_choices)
+        if quick != "不限":
+            f_city = quick
+        job_type = st.radio("岗位类型", ["全部", "实习", "秋招"], horizontal=True)
+        f_keyword = st.text_input("关键词（岗位/公司/标签）", placeholder="例如：国企 / 电气 / 嵌入式 / 新媒体")
         c1, c2 = st.columns(2)
         active_only = c1.checkbox("仅看有效", value=True)
         fake_only = c2.checkbox("只看风险标记")
@@ -123,14 +128,14 @@ def main():
     if s["fake"]:
         st.warning(f"已标记 {s['fake']} 条疑似风险岗位，可在侧边栏勾选“只看风险标记”核对。")
 
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
-        ["岗位列表", "🏆 为你推荐", "🎯 投递工作台", "我的收藏", "👤 我的资料", "说明与合规"])
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
+        ["岗位列表", "🏆 为你推荐", "🎯 投递工作台", "我的收藏", "👤 我的资料", "📮 网申跟踪", "说明与合规"])
 
     # ============ 岗位列表 ============
     with tab1:
         city_arg = None if f_city == "全部" else f_city
         df = load_df(city_arg, f_keyword or None, active_only, fake_only, fav_only,
-                     unexpired, since_days)
+                     unexpired, since_days, job_type=job_type)
         if df.empty:
             st.info("📭 暂无数据：先在左侧选城市并点「立即抓取」。")
         else:
@@ -191,7 +196,8 @@ def main():
 
         city_arg_r = None if f_city == "全部" else f_city
         rows_r = db.query(city=city_arg_r, keyword=f_keyword or None, active_only=active_only,
-                          unexpired_only=unexpired, since_days=since_days, limit=3000)
+                          unexpired_only=unexpired, since_days=since_days,
+                          job_type=job_type, limit=3000)
         if not rows_r:
             st.info("暂无数据：先在左侧选城市并点「🚀 立即抓取」。")
         else:
@@ -245,6 +251,18 @@ def main():
                     note = job.get("apply_note") or resume.apply_message(job)
                     edited = st.text_area("投递理由/开场白（可改）", value=note,
                                           key=f"note_{job['id']}_{state}", height=130)
+                    jd_text = st.text_area(
+                        "（可选）粘贴该岗位 JD / 任职要求 → 生成更贴岗位的简历",
+                        key=f"jd_{job['id']}", height=110,
+                        placeholder="把招聘页面的“岗位职责/任职要求”整段粘进来即可")
+                    if jd_text:
+                        try:
+                            from ihub import resume as _rs
+                            hit, miss = _rs.jd_analysis(jd_text)
+                            st.caption(f"✅ 已覆盖：{'、'.join(hit) if hit else '—'}　|　"
+                                       f"⚠️ 未覆盖（可考虑补充/学习）：{'、'.join(miss[:8]) if miss else '—'}")
+                        except Exception:
+                            pass
                     if state == 1:
                         c1, c2, c3, c4 = st.columns(4)
                         if c1.button("💾 保存理由", key=f"saven_{job['id']}"):
@@ -252,7 +270,7 @@ def main():
                             st.success("已保存")
                         if c2.button("📄 生成定制简历", key=f"cv_{job['id']}"):
                             try:
-                                p = gen_resume_for(job)
+                                p = gen_resume_for(job, jd_text or None)
                                 st.success(f"已生成：{p}")
                             except Exception as e:
                                 st.error(f"生成失败：{e}")
@@ -340,8 +358,88 @@ def main():
             p = prof_mod.save(dict(prof_mod.DEFAULT))
             st.info("已恢复为内置示例资料（罗广睿）")
 
-    # ============ 说明 ============
+        st.divider()
+        st.markdown("#### 🧩 网申自动填写助手（解决秋招网申一个个填很慢）")
+        st.caption("原理：用你本机的资料生成一个**浏览器用户脚本**，在任意公司网申页面右下角出现「📝 填入我的资料」按钮，"
+                   "点击后自动把姓名/手机/邮箱/学校/专业/毕业时间/GPA/自我评价等填进匹配的输入框（蓝框=已填），你核对后再自己提交。"
+                   "**不代登录、不代提交、不绕过验证码**，完全由你手动触发。")
+        st.markdown("**安装步骤**：① 浏览器装 Tampermonkey（油猴）扩展 → ② 点下面按钮生成脚本 → "
+                    "③ 把生成的文件拖进浏览器（或 Tampermonkey 里新建脚本粘贴内容）→ ④ 打开任意网申页面点右下角按钮")
+        if st.button("⬇️ 生成/更新 网申助手.user.js"):
+            from ihub import autofill
+            path = autofill.save_userscript(prof=prof_mod.load())
+            st.success(f"已生成：{path}（资料更新后重新点一次即可）")
+
+    # ============ 📮 网申跟踪 ============
     with tab6:
+        st.markdown("#### 📮 网申跟踪（我投了哪些、进行到哪一步）")
+        st.caption("秋招/实习都能记：公司、岗位、城市、截止日期、进度、备注。进度变化会自动记录投递日期。")
+        stt = db.app_stats()
+        c = st.columns(6)
+        for i, s in enumerate(db.STAGES):
+            c[i].metric(s, stt.get(s, 0))
+
+        with st.expander("➕ 手动添加一条（官网/公众号看到的岗位）"):
+            with st.form("add_app", clear_on_submit=True):
+                a1, a2, a3 = st.columns(3)
+                comp = a1.text_input("公司")
+                tit = a2.text_input("岗位")
+                cty = a3.text_input("城市", value=f_city if f_city != "全部" else "潍坊")
+                a4, a5, a6 = st.columns(3)
+                url = a4.text_input("网申/公告链接")
+                dl2 = a5.text_input("截止日期（YYYY-MM-DD）")
+                jt = a6.selectbox("类型", ["秋招", "实习"])
+                note0 = st.text_input("备注")
+                if st.form_submit_button("添加"):
+                    db.app_add(comp, tit, cty, url, jt, dl2, note0)
+                    st.success("已添加")
+                    st.rerun()
+
+        if st.button("⬇️ 把「投递箱」里的岗位加入跟踪"):
+            ids = [r["id"] for r in db.query(apply_state=1, limit=500)]
+            n = db.app_add_from_job_ids(ids) if ids else 0
+            st.success(f"已加入 {n} 条（重复的自动跳过）")
+
+        rows_app = db.app_list(limit=800)
+        if not rows_app:
+            st.info("还没有跟踪记录：先把岗位加入投递箱，或手动添加一条。")
+        else:
+            edf = pd.DataFrame(rows_app)
+            edf["截止日期"] = edf["deadline"].fillna("")
+            edf["投递日期"] = edf["applied_at"].fillna("")
+            edf["进度"] = edf["stage"]
+            edit_app = st.data_editor(
+                edf[["id", "company", "title", "city", "进度", "投递日期", "截止日期", "url", "note"]],
+                hide_index=True,
+                disabled=["id", "company", "title", "city", "投递日期", "url"],
+                column_config={
+                    "id": None,
+                    "company": "公司", "title": "岗位", "city": "城市",
+                    "进度": st.column_config.SelectboxColumn("进度", options=db.STAGES),
+                    "投递日期": "投递日期", "截止日期": "截止日期",
+                    "url": st.column_config.LinkColumn("网申/公告链接"),
+                    "note": st.column_config.TextColumn("备注", width="medium"),
+                },
+                num_rows="fixed", width="stretch", height=460,
+            )
+            b1, b2, b3 = st.columns([1, 1, 3])
+            if b1.button("💾 保存进度", type="primary"):
+                for r in edit_app.itertuples():
+                    db.app_update(int(r.id), stage=r.进度, deadline=r.截止日期, note=r.note)
+                st.success("已保存")
+                st.rerun()
+            if b2.button("📤 导出网申清单 CSV"):
+                p = os.path.join(OUT_DIR, f"网申跟踪_{datetime.date.today().isoformat()}.csv")
+                os.makedirs(OUT_DIR, exist_ok=True)
+                pd.DataFrame(rows_app).to_csv(p, index=False, encoding="utf-8-sig")
+                st.success(f"已导出：{p}")
+            del_id = b3.number_input("删除某条（填 id）", 0, 10**9, 0, 1)
+            if b3.button("🗑 删除") and del_id:
+                db.app_delete(int(del_id))
+                st.rerun()
+
+    # ============ 说明 ============
+    with tab7:
         st.markdown("#### 使用说明")
         st.markdown(
             "1. 抓取 → 筛选 → 勾选 🎯投递箱 → 保存；\n"
