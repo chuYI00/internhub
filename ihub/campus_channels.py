@@ -8,6 +8,17 @@ from urllib.parse import quote
 
 # 七大板块：(板块标题, [(名称, 链接), ...])
 CHANNEL_GROUPS = [
+    ("🏫 本校与目标院校就业网（直达栏目，最该盯）", [
+        ("中国民航大学·招聘信息", "https://cauc.bysjy.com.cn/module/careers?menu_id=28135"),
+        ("中国民航大学·在线招聘", "https://cauc.bysjy.com.cn/module/onlines?menu_id=28135"),
+        ("中国民航大学·校内双选会", "https://cauc.bysjy.com.cn/module/jobfairs?type=1&menu_id=28135"),
+        ("中国民航大学·校外宣讲会", "https://cauc.bysjy.com.cn/module/careers?type=outer&menu_id=28135"),
+        ("中国民航大学·学院招聘信息", "https://cauc.bysjy.com.cn/module/similar_careers?panel_type=23&menu_id=28135"),
+        ("中国民航大学·通知公告", "https://cauc.bysjy.com.cn/module/news?type_id=13049&menu_id=28132"),
+        ("云南大学云就业平台", "https://jobs.ynu.edu.cn/index"),
+        ("大理大学就业平台", "https://dldx.jysd.com/"),
+        ("昆明理工大学就业网", "http://job.kmust.edu.cn/"),
+    ]),
     ("🏛️ 国家级官方平台（权威性最高）", [
         ("国家大学生就业服务平台 24365（教育部）", "https://job.ncss.cn"),
         ("24365 主站", "https://www.ncss.cn"),
