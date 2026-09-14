@@ -25,7 +25,8 @@ import requests
 from .. import config
 from .base import BaseCrawler
 
-SOURCES_PATH = os.path.join(config.DATA_DIR, "sources.json")
+SOURCES_PATH = os.path.join(config.PROJECT_ROOT, "sources.json")      # 优先：随 Git 版本管理
+SOURCES_FALLBACK = os.path.join(config.DATA_DIR, "sources.json")      # 兼容旧位置
 
 PER_SOURCE_TIMEOUT = 10      # 单源超时（秒）
 PER_SOURCE_MAX_ITEMS = 60    # 单源最多取多少条
@@ -37,11 +38,13 @@ DATE_RE = re.compile(r"(20\d{2}[-/年.]\d{1,2}[-/月.]\d{1,2})")
 
 
 def load_sources():
-    try:
-        with open(SOURCES_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return []
+    for p in (SOURCES_PATH, SOURCES_FALLBACK):
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            continue
+    return []
 
 
 def _text(html_fragment):
