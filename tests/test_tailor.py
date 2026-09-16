@@ -134,7 +134,7 @@ def main() -> int:
     at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
     at.run()
     check("app 无异常", not at.exception, [e.value for e in at.exception])
-    check("有 11 个页签", len(at.tabs) == 11, len(at.tabs))
+    check("有 12 个页签", len(at.tabs) == 12, len(at.tabs))
 
     at.text_area(key="tk_jd").set_value(JD_EMBED)
     at.text_input(key="tk_jt").set_value("嵌入式软件开发工程师")

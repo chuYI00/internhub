@@ -181,9 +181,9 @@ def main():
         st.warning(f"已标记 {s['fake']} 条疑似风险岗位，可在侧边栏勾选“只看风险标记”核对。")
 
     (tab1, tab2, tab3, tab4, tab5, tab6,
-     tab7, tab8, tab9, tab10, tab11) = st.tabs(
+     tab7, tab8, tab9, tab10, tab11, tab12) = st.tabs(
         ["岗位列表", "🏆 为你推荐", "🎯 投递工作台", "我的收藏", "👤 我的资料", "📮 网申跟踪",
-         "🛰 秋招渠道", "📚 备考方案", "📝 简历定制", "🌏 云南秋招", "说明与合规"])
+         "🛰 秋招渠道", "📚 备考方案", "📝 简历定制", "🌏 云南秋招", "🍃 烟草监控", "说明与合规"])
 
     # ============ 岗位列表 ============
     with tab1:
@@ -980,9 +980,115 @@ def main():
         st.caption("⚠️ 烟草「同一批次只能报 1 个单位 1 个岗位，重复投递取消资格」——"
                    "投之前先在「📮 网申跟踪」记一笔，投完立刻改状态。")
 
+    # ============ 🍃 烟草监控（主力备考方向，单独一页） ============
+    with tab11:
+        from ihub import tobacco as TB
+
+        st.markdown("#### 🍃 烟草招聘监控 —— 只盯报名窗口，不让你错过任何一个批次")
+        st.caption("监控源头：**国家烟草专卖局「人才招聘专栏」**（全国各省局、各中烟的公告都在这首发，"
+                   "云南中烟/云南省局的公告同样会出现在这里）。点一下按钮扫一遍，**只有新增才报给你**。")
+        st.warning("烟草铁律：**同一批次只能报 1 个单位 1 个岗位，重复投递直接取消资格**；"
+                   "网申窗口通常只有 **7~10 天**（实测公告原文「逾期不再受理」）。看到公告当天就要动手，"
+                   "投前先在「📮 网申跟踪」记一笔。")
+
+        _seen = TB.load_seen()
+        _c1, _c2, _c3 = st.columns([1, 1, 2])
+        _deep = _c1.checkbox("顺便抓报名窗口", value=True, key="tb_detail",
+                             help="对新公告抓详情页，提取「报名时间 / 报名平台 / 是否限制报考岗位数」，稍慢几秒")
+        if _c2.button("🔍 立即扫描一次", type="primary", key="tb_scan"):
+            with st.spinner("正在扫描国家烟草专卖局招聘专栏…"):
+                try:
+                    st.session_state["tb_res"] = TB.scan(
+                        pages=2, detail_top=8 if _deep else 0)
+                except Exception as e:
+                    st.error(f"扫描失败：{e}")
+        _c3.caption(f"已累计记录 {len(_seen)} 条历史公告（用于算「新增」）。"
+                    f"第一次扫会报出全部历史公告，属正常；之后只报增量。")
+
+        _res = st.session_state.get("tb_res")
+        if not _res:
+            st.info("点上面的「🔍 立即扫描一次」开始。系统已配置**每天自动扫描**（早 8:30 / 晚 20:30），"
+                    "有新增会在对话里直接推给你。")
+        else:
+            _new = TB.by_priority(_res["new"])
+            _urgent = TB.urgent(TB.by_priority(_res["all"]))
+            m1, m2, m3 = st.columns(3)
+            m1.metric("本轮新增", f'{len(_new)} 条')
+            m2.metric("累计已见", f'{_res["total_seen"]} 条')
+            m3.metric("10 天内截止", f'{len(_urgent)} 条')
+            st.caption(f'扫描时间：{_res["checked_at"]}')
+
+            if _urgent:
+                st.error("⏰ **正在报名、且 10 天内截止**（这类必须马上投）：")
+                for it in _urgent:
+                    st.markdown(f'**[{it["days_left"]} 天] {it["title"]}**　{it["link"]}')
+
+            if not _new:
+                st.success("✅ 本轮没有新增公告。")
+            else:
+                st.markdown(f"##### 🆕 本轮新增 {len(_new)} 条")
+            for _i, it in enumerate(_new):
+                with st.expander(f'{TB.stars(it["priority"])}　[{it["kind"]}]　{it["title"][:46]}'):
+                    st.markdown(f'**公告原文**：{it["link"]}')
+                    if it.get("published"):
+                        st.caption(f'发布月份：{it["published"]}　性质：{it["kind"]}　'
+                                   f'优先级：{TB.stars(it["priority"])}')
+                    if it.get("apply_from") or it.get("apply_to"):
+                        _win = (f'报名窗口：{it.get("apply_from") or "?"} ~ '
+                                f'{it.get("apply_to") or "?"}（{it.get("open_days") or "?"} 天）')
+                        if it.get("days_left") is not None:
+                            _d = it["days_left"]
+                            _win += "　⏰ 还剩 %d 天" % _d if _d >= 0 else "　（已结束）"
+                        st.info(_win)
+                    if it.get("apply_platform"):
+                        st.markdown(f'**报名平台**：{it["apply_platform"]}　'
+                                    f'（点开后用右下角「📝 网申助手」填）')
+                    if it.get("quota_note"):
+                        st.warning(it["quota_note"])
+                    _b1, _b2 = st.columns([1, 1])
+                    if _b1.button("➕ 记进网申跟踪", key=f'tb_add_{_i}_{it["id"]}'):
+                        db.app_add(company=it["title"][:24], title="（报名后补岗位）",
+                                   city="云南" if it.get("is_yunnan") else "",
+                                   url=it.get("apply_platform") or it["link"],
+                                   job_type="秋招", deadline=it.get("apply_to") or "",
+                                   note=it["title"])
+                        st.success("已加入「📮 网申跟踪」，投完记得标记已投。")
+                        st.rerun()
+                    _b2.markdown(f'[打开公告原文 ↗]({it["link"]})')
+
+            st.divider()
+            st.markdown("##### 📋 全部公告（按优先级排序，报名中的排最前）")
+            _tb_rows = []
+            for it in TB.by_priority(_res["all"]):
+                _tb_rows.append({
+                    "优先级": TB.stars(it["priority"]),
+                    "性质": it["kind"],
+                    "公告": it["title"][:60],
+                    "发布": it.get("published") or "—",
+                    "链接": it["link"],
+                    "本轮新增": "🆕" if it.get("is_new") else "",
+                })
+            st.dataframe(pd.DataFrame(_tb_rows), hide_index=True, width="stretch",
+                         column_config={"链接": st.column_config.LinkColumn("公告原文")})
+
+            st.download_button("⬇ 导出监控报告（txt）", data=TB.as_text(_res).encode("utf-8"),
+                               file_name="烟草监控报告.txt", mime="text/plain", key="tb_dl")
+
+        st.divider()
+        with st.expander("📌 这个监控盯得住 / 盯不住什么（说清楚，别误判）"):
+            st.markdown(
+                "- **盯得住**：国家烟草专卖局「人才招聘专栏」的**全部公告**（各省局、各中烟、专业公司），"
+                "以及本地数据源里标题含烟草的条目（高校就业网、人社厅、应届生求职网等）。\n"
+                "- **盯不住**：云南中烟、云南省局官网是 Vue 前端渲染，静态抓不到 —— 但它们发的公告"
+                "**同样会出现在国家局专栏**，所以不影响你不漏公告。\n"
+                "- **建议**：每天早晚各跑一次（自动化已配好），公告一出当天就能看到；"
+                "国家局专栏还有「招聘」热搜词入口，可配合人工扫一眼。\n"
+                "- 报名系统多为第三方平台（如 `qhtobacco.zhaopin.com`），点报名平台进官网后，"
+                "**右下角「📝 网申助手」照样能帮你填**。")
+
     # ============ 说明 ============
 
-    with tab11:
+    with tab12:
         st.markdown("#### 使用说明")
         st.markdown(
             "1. 抓取 → 筛选 → 勾选 🎯投递箱 → 保存；\n"
