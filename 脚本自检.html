@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>InternHub 脚本自检（网申助手 / 采集助手）</title>
+<style>
+  body { margin:0; font:14px/1.7 -apple-system,"Microsoft YaHei",sans-serif; color:#1f2328; background:#f6f8fa; }
+  .wrap { max-width:900px; margin:0 auto; padding:22px 18px 80px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:#57606a; font-size:13px; margin-bottom:16px; }
+  .card { background:#fff; border:1px solid #d0d7de; border-radius:10px; padding:14px 16px; margin-bottom:14px; }
+  .status { display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px dashed #eaeef2; }
+  .status:last-child { border-bottom:none; }
+  .dot { width:12px; height:12px; border-radius:50%; flex:0 0 12px; background:#d0d7de; }
+  .ok .dot { background:#1a7f37; }
+  .bad .dot { background:#cf222e; }
+  .name { flex:0 0 190px; font-weight:600; }
+  .msg { color:#57606a; font-size:13px; }
+  .ok .msg { color:#1a7f37; }
+  .bad .msg { color:#cf222e; }
+  .btn { padding:7px 13px; border:1px solid #d0d7de; border-radius:7px; background:#f6f8fa; cursor:pointer; font-size:13px; }
+  .btn.primary { background:#1f6feb; color:#fff; border-color:#1f6feb; }
+  table { border-collapse:collapse; width:100%; background:#fff; }
+  td { border:1px solid #d0d7de; padding:7px 10px; vertical-align:middle; }
+  td.lab { width:150px; background:#f6f8fa; color:#24292f; }
+  .req { color:#cf222e; }
+  input[type=text], input[type=tel], input[type=email], input[type=date], select, textarea {
+    width:100%; box-sizing:border-box; padding:6px 8px; border:1px solid #d0d7de; border-radius:6px; font-size:14px; font-family:inherit; }
+  textarea { min-height:64px; resize:vertical; }
+  .radio label { margin-right:16px; }
+  code { background:#eff1f3; padding:1px 5px; border-radius:4px; font-size:12.5px; }
+  ol { padding-left:20px; }
+  .hint { color:#57606a; font-size:13px; }
+  .tag { display:inline-block; background:#eef4ff; color:#1f6feb; border-radius:5px; padding:1px 7px; font-size:12px; margin-left:6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>InternHub 脚本自检</h1>
+  <div class="sub">这个页面用来确认「网申助手 / 采集助手」到底装好了没有 —— 不用登录任何网站，本地就能试填。</div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <b>① 检测结果</b>
+      <button class="btn primary" id="recheck">🔄 重新检测</button>
+    </div>
+    <div id="results"></div>
+    <div class="hint" style="margin-top:10px">
+      注意：脚本是异步加载的，刚打开本页请等 2 秒再点「重新检测」。
+    </div>
+  </div>
+
+  <div class="card">
+    <b>② 如果上面全是 ❌ —— 照这 3 步排查</b>
+    <ol>
+      <li><b>油猴装了没？</b>看浏览器右上角有没有 <b>黑色的 Tampermonkey 图标</b>（在拼图里点「显示在工具栏」）。
+          没有就去装：Edge → 扩展 → 获取 Microsoft Edge 扩展 → 搜 <code>Tampermonkey</code>。</li>
+      <li><b>脚本装了没？</b>点油猴图标 → <b>管理面板</b> → 看有没有这两条、状态是不是「已启用」：<br>
+          <code>网申助手 v2（本地·本人使用）</code>、<code>采集助手（InternHub·本地本人使用）</code>。<br>
+          没有 → 把桌面 <code>简历\</code> 里的 <code>网申助手.user.js</code> 和 <code>采集助手.user.js</code> <b>拖进浏览器窗口</b>，弹出安装页点「安装」。</li>
+      <li><b>是不是旧版本？</b>旧版脚本没有 GM 权限，会被部分网站的安全策略拦掉。重新安装上面两个文件即可（已是 v2.1）。</li>
+    </ol>
+    <div class="hint" style="margin-top:8px;padding:9px 11px;background:#fff8e5;border-left:3px solid #d4a72c;border-radius:5px">
+      <b>⚠️ 本页是"本地文件"（地址以 <code>file:///</code> 开头）</b>：浏览器默认<b>不允许</b>用户脚本在本地文件上运行，
+      所以这里显示 ❌ <b>不代表脚本在网站上不工作</b>。<br>
+      两个办法：① <b>最省事</b>——打开 InternHub 网站 <code>http://localhost:8501</code>，看右下角有没有 📝 胶囊（有就是装好了）；<br>
+      ② 想让本页也能检测：点油猴图标 → <b>管理面板</b> → 左侧「设置」→ 把 <b>「配置模式」改成高级</b> →
+      在「安全」里勾上 <b>「允许脚本访问文件网址」</b>（Chrome/Edge 还需在扩展详情页打开「允许访问文件网址」）→ 刷新本页。
+    </div>
+    <div class="hint" style="margin-top:8px">实在装不上扩展 → 用<b>书签版</b>：把 <code>网申书签.txt</code> 里那一整行 <code>javascript:...</code> 存成一个书签，在网申页点书签也能填（缺点：iframe 表单填不了、没有面板）。</div>
+  </div>
+
+  <div class="card">
+    <b>③ 拿下面这张「假网申表」试填</b>
+    <div class="hint" style="margin-bottom:10px">
+      点右下角 <b>📝 网申助手</b> → 面板里点「<b>填入空字段</b>」→ 下面这些空会按你的资料填上，并显示绿框。<br>
+      标 <span class="req">*</span> 的是真实网申里常见的必填项。留空 = 你资料里没这项，可在面板里当场补。
+    </div>
+    <table>
+      <tr><td class="lab"><span class="req">*</span> 姓名</td><td><input type="text" name="userName" placeholder="请输入姓名"></td></tr>
+      <tr><td class="lab">姓名拼音缩写</td><td><input type="text" name="pinyin" placeholder="例：张三 → ZHS"></td></tr>
+      <tr><td class="lab"><span class="req">*</span> 性别</td>
+          <td class="radio">
+            <label><input type="radio" name="gender" value="男"> 男</label>
+            <label><input type="radio" name="gender" value="女"> 女</label>
+          </td></tr>
+      <tr><td class="lab">出生日期</td><td><input type="date" name="birthday"></td></tr>
+      <tr><td class="lab">身份证号</td><td><input type="text" name="idCard" placeholder="18 位身份证号"></td></tr>
+      <tr><td class="lab"><span class="req">*</span> 手机号码</td><td><input type="tel" name="mobile" placeholder="11 位手机号"></td></tr>
+      <tr><td class="lab"><span class="req">*</span> 电子邮箱</td><td><input type="email" name="email" placeholder="用于接收笔试通知"></td></tr>
+      <tr><td class="lab"><span class="req">*</span> 毕业院校</td><td><input type="text" name="school" placeholder="请输入学校全称"></td></tr>
+      <tr><td class="lab">学院</td><td><input type="text" name="college" placeholder="如：计算机科学与技术学院"></td></tr>
+      <tr><td class="lab"><span class="req">*</span> 所学专业</td><td><input type="text" name="major" placeholder="请输入专业名称"></td></tr>
+      <tr><td class="lab"><span class="req">*</span> 学历</td>
+          <td>
+            <select name="degree">
+              <option value="">请选择</option>
+              <option>大专</option>
+              <option>本科及以上</option>
+              <option>硕士研究生</option>
+              <option>博士研究生</option>
+            </select>
+            <div class="hint">你资料里是「本科」→ 应该自动选到「本科及以上」</div>
+          </td></tr>
+      <tr><td class="lab">毕业时间</td><td><input type="month" name="graduation"></td></tr>
+      <tr><td class="lab">GPA</td><td><input type="number" step="0.01" name="gpa"></td></tr>
+      <tr><td class="lab">籍贯</td>
+          <td>
+            <select name="hometown">
+              <option value="">请选择</option>
+              <option>北京市</option>
+              <option>云南省</option>
+              <option>四川省</option>
+              <option>山东省</option>
+            </select>
+            <div class="hint">「云南大理」应命中「云南省」；若你资料里没填籍贯 → 面板里补一下再点填入</div>
+          </td></tr>
+      <tr><td class="lab">现居住地</td><td><input type="text" name="currentCity" placeholder="请输入现居住地"></td></tr>
+      <tr><td class="lab">政治面貌</td>
+          <td>
+            <select name="political">
+              <option value="">请选择</option>
+              <option>中共党员</option>
+              <option>共青团员</option>
+              <option>群众</option>
+            </select>
+          </td></tr>
+      <tr><td class="lab">英语水平</td><td><input type="text" name="englishLevel" placeholder="如：CET-6"></td></tr>
+      <tr><td class="lab">求职意向</td><td><input type="text" name="intent" placeholder="如：信息化管理岗"></td></tr>
+      <tr><td class="lab">自我评价</td><td><textarea name="selfEvaluation" placeholder="请输入自我评价"></textarea></td></tr>
+    </table>
+    <div style="margin-top:12px;display:flex;gap:8px">
+      <button class="btn" id="clearBtn">🧹 清空这张表，重试一次</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <b>④ 采集助手怎么自检</b>
+    <div class="hint">这个页面没有岗位列表，点「📥 采集本页岗位」会提示"没识别到数据"—— <b>这本身就是正常的</b>，说明按钮正常挂上了。
+      真正采集请到你登录的国聘 / 24365 / BOSS / 智联 / 牛客 页面，或飞书多维表格页。</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  function hasText(t) {
+    var all = document.querySelectorAll('div,button');
+    for (var i = 0; i < all.length; i++) {
+      var s = (all[i].textContent || '').trim();
+      if (s === t || s.indexOf(t) === 0 && s.length < 30) {
+        var st = getComputedStyle(all[i]);
+        if (st.position === 'fixed') return true;
+      }
+    }
+    return false;
+  }
+  function check() {
+    var rows = [
+      { n: '📝 网申助手（油猴版）', ok: hasText('📝 网申助手'),
+        yes: '已装好 ✅ 点右下角胶囊就能试填下面这张表',
+        no: '没检测到脚本（或油猴没装）→ 看第②步' },
+      { n: '📥 采集助手（油猴版）', ok: hasText('📥 采集本页岗位'),
+        yes: '已装好 ✅ 到已登录的岗位页面点它导出 CSV',
+        no: '没检测到脚本（或油猴没装）→ 看第②步' },
+    ];
+    var box = document.getElementById('results');
+    box.innerHTML = '';
+    rows.forEach(function (r) {
+      var d = document.createElement('div');
+      d.className = 'status ' + (r.ok ? 'ok' : 'bad');
+      var dot = document.createElement('span'); dot.className = 'dot';
+      var nm = document.createElement('span'); nm.className = 'name'; nm.textContent = r.n;
+      var ms = document.createElement('span'); ms.className = 'msg'; ms.textContent = r.ok ? r.yes : r.no;
+      d.appendChild(dot); d.appendChild(nm); d.appendChild(ms);
+      box.appendChild(d);
+    });
+    var tip = document.createElement('div');
+    tip.className = 'status';
+    tip.innerHTML = '<span class="dot"></span><span class="name">🔖 书签版（免装扩展）</span>' +
+      '<span class="msg">无法自动检测：书签栏里点一下「网申助手」，会弹窗告诉你填了几个字段</span>';
+    box.appendChild(tip);
+  }
+  document.getElementById('recheck').addEventListener('click', check);
+  document.getElementById('clearBtn').addEventListener('click', function () {
+    document.querySelectorAll('input,textarea').forEach(function (el) {
+      if (el.type === 'radio' || el.type === 'checkbox') el.checked = false; else el.value = '';
+      el.style.outline = '';
+    });
+    document.querySelectorAll('select').forEach(function (el) { el.selectedIndex = 0; el.style.outline = ''; });
+    document.querySelectorAll('textarea').forEach(function (el) { el.value = ''; el.style.outline = ''; });
+  });
+  check();
+  setTimeout(check, 2000);
+})();
+</script>
+</body>
+</html>

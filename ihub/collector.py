@@ -18,11 +18,15 @@ def build_js() -> str:
     return r"""// ==UserScript==
 // @name         采集助手（InternHub·本地本人使用）
 // @namespace    internhub.local
-// @version      2.0
+// @version      2.1
 // @description  在已登录的浏览器里，把当前页面的岗位（含网页表格 / 飞书多维表格）导出 CSV，再导入 InternHub
 // @match        *://*/*
-// @grant        none
+// @match        file:///*
+// @grant        GM_info
 // ==/UserScript==
+// 注意：故意声明 GM_info（而不是 @grant none）——@grant none 会以"页面脚本"注入，
+// 政府/国企网站的严格 CSP 会把它拦掉（表现：页面上没有按钮）。声明任一 GM_* 后
+// Tampermonkey 会在自己的沙箱里执行，不受页面 CSP 影响。
 (function () {
   'use strict';
 

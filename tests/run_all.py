@@ -31,12 +31,14 @@ def run(cmd: list[str], label: str) -> bool:
 def main() -> int:
     results: dict[str, bool] = {}
 
-    print("\n===== 重新生成采集脚本（书签与油猴脚本同源） =====")
-    r = subprocess.run([PY, "-m", "ihub.collector"], cwd=str(ROOT),
-                       env={**os.environ, "PYTHONIOENCODING": "utf-8"},
-                       capture_output=True, text=True, encoding="utf-8", errors="replace")
-    print((r.stdout or "").strip() or (r.stderr or "").strip())
-    results["生成采集脚本"] = r.returncode == 0
+    print("\n===== 重新生成采集/网申脚本（书签与油猴脚本同源） =====")
+    for mod, label in (("ihub.collector", "采集助手 + 采集书签"), ("ihub.autofill", "网申助手 + 网申书签")):
+        r = subprocess.run([PY, "-m", mod], cwd=str(ROOT),
+                           env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+        out = ((r.stdout or "") + (r.stderr or "")).strip()
+        print(f"[{label}] " + (out or "(无输出)"))
+        results[f"生成 {label}"] = r.returncode == 0
 
     results["采集助手（油猴版）"] = run(
         ["node", "tests/collector_dom_test.js"], "采集助手 .user.js")

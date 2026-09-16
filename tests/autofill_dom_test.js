@@ -275,5 +275,29 @@ console.log('[12] 网申书签（javascript: 免插件版）');
   }
 }
 
+/* ---------- 13. 油猴沙箱模式（脚本声明了 GM_*，用来绕过页面 CSP） ---------- */
+console.log('[13] 油猴沙箱模式：@grant GM_* 时用 GM 存储');
+{
+  const src = fs.readFileSync(NAME, 'utf8');
+  const header = src.slice(0, src.indexOf('==/UserScript==') + 1);   // 只看 UserScript 头
+  check('脚本头声明了 GM 权限（而不是 @grant none）',
+    /@grant\s+GM_getValue/.test(header) && !/@grant\s+none/.test(header),
+    (header.match(/@grant\s+\S+/g) || []).join(' '));
+
+  const root = new El('body');
+  const p = input({});
+  root.appendChild(fieldRow('政治面貌', p));
+  const sandbox = buildSandbox(root, { gm: true });
+  vm.runInContext(code, vm.createContext(sandbox), { filename: NAME });
+  const api = sandbox.window.__IHUB_AUTOFILL__;
+  api.setOverride('political', '共青团员');
+  check('覆盖值写进了 GM 存储（不依赖 localStorage）',
+    sandbox.__gmStore.has('ihub_profile_overrides_v1'), [...sandbox.__gmStore.keys()]);
+  const st = api.fillDoc(sandboxDoc(root), 'empty');
+  check('沙箱模式下也能按覆盖值填表', p.value === '共青团员', p.value);
+  api.clearOverrides();
+  check('GM 存储也能清空', !sandbox.__gmStore.has('ihub_profile_overrides_v1'));
+}
+
 console.log('\n结果: ' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);

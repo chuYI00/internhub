@@ -38,29 +38,53 @@ KEYS = [
 _TEMPLATE = r"""// ==UserScript==
 // @name         网申助手 v2（本地·本人使用）
 // @namespace    internhub.local
-// @version      2.0
+// @version      2.1
 // @description  在网申/校招表单页一键填入个人资料；本人点击触发，不代登录、不代提交、不联网
 // @match        *://*/*
-// @grant        none
+// @match        file:///*
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_deleteValue
 // @run-at       document-idle
 // ==/UserScript==
+// 注意：这里故意声明 GM_* 权限而不是 @grant none。
+// @grant none 时脚本会以"页面脚本"的方式注入，遇到政府/国企网站的严格内容安全策略(CSP)会被拦掉，
+// 表现就是"页面上什么都没有"。声明 GM_* 后 Tampermonkey 在自己的沙箱里执行，不受页面 CSP 影响。
 (function () {
   'use strict';
 
   var BASE = __PAYLOAD__;
   var LS_KEY = 'ihub_profile_overrides_v1';
 
+  /* ==================== 存储（优先油猴存储，退化为 localStorage） ==================== */
+  var GM_OK = (typeof GM_getValue === 'function' && typeof GM_setValue === 'function');
+  function storeGet(k) {
+    try { if (GM_OK) return GM_getValue(k, null); } catch (e) {}
+    try { return localStorage.getItem(k); } catch (e) {}
+    return null;
+  }
+  function storeSet(k, v) {
+    try { if (GM_OK) { GM_setValue(k, v); return true; } } catch (e) {}
+    try { localStorage.setItem(k, v); return true; } catch (e) {}
+    return false;
+  }
+  function storeDel(k) {
+    try { if (typeof GM_deleteValue === 'function') { GM_deleteValue(k); return true; } } catch (e) {}
+    try { localStorage.removeItem(k); return true; } catch (e) {}
+    return false;
+  }
+
   /* ==================== 资料 ==================== */
   function overrides() {
-    try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}') || {}; } catch (e) { return {}; }
+    try { return JSON.parse(storeGet(LS_KEY) || '{}') || {}; } catch (e) { return {}; }
   }
   function readOverrides() { return overrides(); }
   function setOverride(k, v) {
     var o = overrides();
     if (v) { o[k] = v; } else { delete o[k]; }
-    try { localStorage.setItem(LS_KEY, JSON.stringify(o)); } catch (e) {}
+    storeSet(LS_KEY, JSON.stringify(o));
   }
-  function clearOverrides() { try { localStorage.removeItem(LS_KEY); } catch (e) {} }
+  function clearOverrides() { storeDel(LS_KEY); }
   function P() { return Object.assign({}, BASE, overrides()); }
 
   /* ==================== 字段字典 ==================== */
@@ -460,12 +484,14 @@ _TEMPLATE = r"""// ==UserScript==
         setInterval(ensureMounted, 2500);  /* SPA/前端框架会重渲染 body */
   }
 
-  // 调试/自测入口
-  window.__IHUB_AUTOFILL__ = {
-    labelOf: labelOf, bestField: bestField, fillDoc: fillDoc, adapt: adapt,
-    fillSelect: fillSelect, FIELDS: FIELDS, profile: P, setOverride: setOverride,
-    getOverrides: readOverrides, clearOverrides: clearOverrides, buildPanel: buildPanel,
-  };
+  // 调试/自测入口（沙箱模式下写 window 可能被拒，忽略即可）
+  try {
+    window.__IHUB_AUTOFILL__ = {
+      labelOf: labelOf, bestField: bestField, fillDoc: fillDoc, adapt: adapt,
+      fillSelect: fillSelect, FIELDS: FIELDS, profile: P, setOverride: setOverride,
+      getOverrides: readOverrides, clearOverrides: clearOverrides, buildPanel: buildPanel,
+    };
+  } catch (e) {}
 })();
 """
 

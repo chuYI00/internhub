@@ -395,6 +395,14 @@ function buildSandbox(root, opts) {
   sandbox.frames = [];
   sandbox.self = sandbox;
   sandbox.__listeners = listeners;
+  // 油猴沙箱模式（脚本声明了 @grant GM_*），用 Map 模拟 GM 存储
+  if (o.gm) {
+    const gmStore = new Map();
+    sandbox.GM_getValue = (k, d) => (gmStore.has(k) ? gmStore.get(k) : (d === undefined ? null : d));
+    sandbox.GM_setValue = (k, v) => { gmStore.set(k, v); };
+    sandbox.GM_deleteValue = k => { gmStore.delete(k); };
+    sandbox.__gmStore = gmStore;
+  }
   return sandbox;
 }
 
