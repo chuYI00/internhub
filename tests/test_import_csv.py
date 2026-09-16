@@ -132,6 +132,28 @@ def main() -> int:
               and r5["link"] == "https://t.com/1" and r5["deadline"] == "2026-11-30",
               r5 and dict(r5))
 
+        print("[5b] 飞书多维表格导出的表头（带后缀的列名）")
+        feishu = ("序号,招聘单位,招聘岗位,工作城市,招聘批次,投递截止时间,岗位链接,"
+                  "学历要求,岗位职责,备注\r\n"
+                  "1,云南中烟工业有限责任公司,数字化产线运维工程师,昆明,2027届,2026/11/28,"
+                  "https://www.ynzy-tobacco.com/,本科,负责智能产线信息系统运维,技术类\r\n"
+                  "2,大理州烟草专卖局（公司）,信息系统管理岗,大理,2027届,2026/12/05,"
+                  "https://yn.tobacco.gov.cn/,本科,信息中心系统与数据管理,技术类\r\n")
+        resF = importer.import_csv_text(feishu, source="飞书导出")
+        check("飞书表头全部识别（无告警）", resF["rows"] == 2 and not resF.get("warnings"), resF)
+        mp = resF["mapping"]
+        check("『招聘单位』→ company", mp.get("company") == 1, mp)
+        check("『招聘岗位』→ title", mp.get("title") == 2, mp)
+        check("『工作城市』→ city", mp.get("city") == 3, mp)
+        check("『招聘批次』→ batch（带后缀也要认）", mp.get("batch") == 4, mp)
+        check("『投递截止时间』→ deadline", mp.get("deadline") == 5, mp)
+        check("『岗位链接』→ link", mp.get("link") == 6, mp)
+        rf = conn.execute("SELECT * FROM jobs WHERE source='飞书导出' AND city='大理'").fetchone()
+        check("大理那条字段对齐（届别/截止/链接）",
+              rf and rf["batch"] == "2027届" and rf["deadline"] == "2026/12/05"
+              and rf["link"] == "https://yn.tobacco.gov.cn/",
+              rf and dict(rf))
+
         print("[6] 制表符里带引号注释、以及分号分隔的导出")
         semi = "岗位;公司;城市\n数据采集工程师;某科技公司;昆明\n"
         res6 = importer.import_csv_text(semi, source="分号表")

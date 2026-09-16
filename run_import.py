@@ -1,97 +1,57 @@
-"""CSV 导入：把其他来源（Excel/官网/群文件等）整理好的岗位清单导入库。
-用法：python run_import.py 你的文件.csv   （UTF-8；也可用 UTF-8-SIG/BOM）
-表头支持：岗位/岗位名称/职位/title 等，公司,城市,薪资,学历,标签,链接/投递链接,截止/截止日期,描述,来源(默认CSV导入)
+# -*- coding: utf-8 -*-
+"""CSV 导入（命令行）：把其他来源（Excel / 飞书多维表格 / 官网 / 群文件）的岗位清单导入库。
+
+用法：
+    venv\\Scripts\\python.exe run_import.py 你的文件.csv
+    venv\\Scripts\\python.exe run_import.py 飞书导出.csv --source 飞书表1
+
+说明：**解析逻辑统一在 ihub/importer.py**，这里只是命令行外壳。
+      以前这个文件里另有一套表头别名表，两处各改各的、慢慢就不一致了
+      （同类坑：项目里曾有两个 sources.json，往被遮蔽的那个里加东西永远不生效）。
+
+表头怎么填都行（自动识别别名，认不出的列会写进"描述"不丢数据）：
+    岗位 / 职位名称 / 招聘岗位　　　公司 / 单位名称 / 招聘单位
+    工作城市 / 工作地点 / 地点　　　投递链接 / 岗位链接 / 报名入口
+    截止时间 / 投递截止时间　　　　招聘批次 / 届别 / 毕业年份
+    薪资 / 学历要求 / 岗位职责 / 备注 …
 """
 import argparse
-import csv
-import hashlib
 import os
 import sys
 
-from ihub import db
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from ihub import config, db, importer  # noqa: E402
 
 
-HEADER_ALIAS = {
-    "title": ["岗位", "岗位名称", "职位", "职位名称", "title", "岗位名称名称"],
-    "company": ["公司", "公司名称", "企业", "company"],
-    "city": ["城市", "地区", "地点", "工作地点", "city"],
-    "salary": ["薪资", "薪酬", "工资", "salary"],
-    "degree": ["学历", "学历要求", "degree"],
-    "tags": ["标签", "岗位标签", "tags"],
-    "industry": ["行业", "industry"],
-    "link": ["链接", "投递链接", "报名链接", "官网链接", "url", "link", "申请链接"],
-    "deadline": ["截止", "截止时间", "截止日期", "deadline", "报名截止"],
-    "description": ["描述", "要求", "岗位要求", "描述要求", "description"],
-    "job_type": ["岗位类型", "类型", "招聘类型", "job_type", "实习/秋招"],
-    "batch": ["届别", "毕业届", "招聘届别", "batch", "面向届别"],
-    "source_name": ["来源", "来源渠道", "source"],
-}
+def _read_text(path: str) -> str:
+    """按 UTF-8-SIG 读 —— 飞书/Excel 导出的 CSV 常带 BOM，会让第一列表头认不出来。"""
+    with open(path, "r", encoding="utf-8-sig", errors="replace") as f:
+        return f.read()
 
 
-def detect_header(headers):
-    low = [str(h).strip().lower() for h in headers]
-    mapping = {}
-    for field, aliases in HEADER_ALIAS.items():
-        for i, h in enumerate(low):
-            if h in [a.lower() for a in aliases]:
-                mapping[field] = i
-                break
-    return mapping
-
-
-def main():
-    ap = argparse.ArgumentParser(description="导入 CSV 岗位清单（其他来源）")
-    ap.add_argument("csv", help="CSV 文件路径（UTF-8）")
-    ap.add_argument("--source", default="CSV导入", help="标记数据来源")
+def main() -> int:
+    ap = argparse.ArgumentParser(description="导入 CSV/TSV 岗位清单（其他来源）")
+    ap.add_argument("csv", help="CSV/TSV 文件路径（UTF-8，可带 BOM）")
+    ap.add_argument("--source", default="CSV导入", help="数据来源标记（默认 CSV导入）")
     args = ap.parse_args()
 
     if not os.path.exists(args.csv):
         print("找不到文件：", args.csv)
-        sys.exit(1)
+        return 1
 
     db.init_db()
-    jobs = []
-    with open(args.csv, "r", encoding="utf-8-sig", newline="") as f:
-        reader = csv.reader(f)
-        rows = list(reader)
-    if not rows:
-        print("空文件")
-        return
-    mp = detect_header(rows[0])
-    for row in rows[1:]:
-        if not row or not any(c.strip() for c in row):
-            continue
-        def g(field):
-            i = mp.get(field)
-            return row[i].strip() if (i is not None and i < len(row)) else ""
-        title = g("title")
-        if not title:
-            continue
-        link = g("link")
-        dedup = hashlib.md5(f"{title}|{g('company')}|{g('city')}|{link}".encode("utf-8")).hexdigest()[:16]
-        jobs.append({
-            "source": g("source_name") or args.source,
-            "job_id": dedup,
-            "title": title,
-            "company": g("company"),
-            "city": g("city"),
-            "salary": g("salary"),
-            "salary_min": None, "salary_max": None,
-            "degree": g("degree"),
-            "duration": "",
-            "tags": g("tags"),
-            "industry": g("industry"),
-            "link": link,
-            "deadline": g("deadline"),
-            "published_at": "",
-            "description": g("description"),
-            "job_type": g("job_type") or "实习",
-            "batch": g("batch"),
-        })
-    res = db.upsert_jobs(jobs)
-    print(f"读取 {len(jobs)} 行 → 新增 {res['inserted']} / 更新 {res['updated']} / 疑似风险 {res['flagged']}")
-    print("表头映射：", mp or "（未识别列名，请确认表头：岗位,公司,城市,薪资,学历,标签,链接,截止日期）")
+    text = _read_text(args.csv)
+    res = importer.import_csv_text(text, source=args.source)
+
+    print(f"读取 {res.get('rows', 0)} 行 → 新增 {res.get('inserted', 0)} / "
+          f"更新 {res.get('updated', 0)} / 疑似风险 {res.get('flagged', 0)}")
+    print("表头映射：", res.get("mapping") or "（一列都没认出，已按第一列当岗位名兜底）")
+    for w in res.get("warnings") or []:
+        print("  [提醒]", w)
+    print("数据库：", config.DB_PATH)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
