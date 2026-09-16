@@ -15,3 +15,6 @@ _web.log*
 简历材料/
 网申书签.txt
 backup/
+
+# ===== 不要把 GitHub token 提交上去 =====
+token.txt
