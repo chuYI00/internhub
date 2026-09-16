@@ -916,48 +916,83 @@ def main():
                     st.markdown(open(_plan_md, encoding="utf-8").read())
             st.divider()
 
-        st.markdown("#### 📚 备考方案（选目标岗位 → 自动出方案）")
-        from ihub import study
-        tname = st.selectbox("我要备考的目标", list(study.TARGETS.keys()), key="study_target")
-        d = study.TARGETS[tname]
-        st.info(d["note"])
-        st.markdown("**考什么**：" + "　".join(f"`{s}`" for s in d["subjects"]))
+        # ============ 🎓 备考方案生成器（第 4 步重构：通用，不写死烟草）============
+        st.markdown("#### 🎓 备考方案生成器（选目标 → 自动出方案）")
+        st.caption("不是「一堆课程链接 + 加油」，而是像教培老师那样：**考什么、分值怎么分、"
+                   "该抓什么可以放弃什么、还剩 N 天每天几点干什么、哪些东西必须背下来**。")
+        from ihub import studyplan as sp
 
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.markdown("**🎬 看什么课**")
-            for name, url in d["courses"]:
-                st.markdown(f"- [{name}]({url})")
-        with c2:
-            st.markdown("**✍️ 哪里刷题**")
-            for name, url in list(d["practice"]) + list(study.COMMON_PRACTICE):
-                st.markdown(f"- [{name}]({url})")
-        with c3:
-            st.markdown("**🔗 官方信息源**")
-            for name, url in list(d["official"]) + list(study.COMMON_OFFICIAL):
-                st.markdown(f"- [{name}]({url})")
+        _g1, _g2, _g3, _g4 = st.columns([2, 1.4, 1.2, 1])
+        _target = _g1.selectbox("① 目标单位", sp.targets(), key="sp_target")
 
-        st.markdown("**🗓 复习时间表**")
-        import pandas as _pd2
-        st.dataframe(_pd2.DataFrame(study.TIME_PLAN, columns=["阶段", "做什么"]),
-                     hide_index=True, width="stretch")
+        # 自定义：允许直接填一个不在列表里的单位名
+        _custom = _g1.text_input("上面没有？直接填单位名（填了就按它出方案）", key="sp_custom",
+                                 placeholder="例如：云南省交通投资建设集团")
+        if _custom.strip():
+            _target = _custom.strip()
 
-        st.markdown("**💬 面试准备**")
-        for it in study.INTERVIEW:
-            st.markdown(f"- {it}")
+        _role = _g2.text_input("② 目标岗位（决定专业知识考哪套）", key="sp_role",
+                               placeholder="如：设备运维 / 信息化 / 电气")
+        _sp_short = sp.profile_of(_target)["short"]
+        _default_date = sp.default_exam_date(_sp_short)
+        _edate = _g3.text_input("③ 考试日期（YYYY-MM-DD）", value=_default_date, key="sp_date")
+        _hours = _g4.number_input("④ 每天可学(小时)", 1, 14, 6, 1, key="sp_hours")
+
+        if st.button("🎓 生成备考方案", type="primary", key="sp_gen"):
+            st.session_state["sp_plan"] = sp.generate(
+                _target, role=_role, exam_date=_edate, hours=int(_hours))
+
+        _plan = st.session_state.get("sp_plan")
+        if not _plan:
+            st.info("填好上面四项，点「🎓 生成备考方案」。"
+                    "不知道考试日期也没关系 —— 会按往年的公告节奏给个默认值，你可以改。")
+        else:
+            _n = _plan["days_left"]
+            _k1, _k2, _k3, _k4 = st.columns(4)
+            _k1.metric("剩余天数", f"{_n} 天" if _n > 0 else "已过期")
+            _k2.metric("每天", f'{_plan["hours_per_day"]} 小时')
+            _k3.metric("总可用", f'{_plan["total_hours"]} 小时')
+            _k4.metric("专业知识方向", _plan["role_key"])
+            if _n <= 0:
+                st.error("考试日期填的是过去的日期（或没填对）—— 改成未来日期再生成一次，"
+                         "阶段划分才会按剩余天数倒推。")
+            elif _n <= 21:
+                st.warning(f"⏰ **只剩 {_n} 天** —— 方案已自动切成「冲刺模式」："
+                           "不铺新知识，只做整卷计时 + 背必背清单 + 复盘错题。")
+            else:
+                st.success(f"距考试 {_n} 天，方案按「基础 → 强化 → 冲刺 → 考前一周」倒推。")
+            st.info(_plan["note"] + ("\n\n⏰ " + _plan["exam_note"] if _plan["exam_note"] else ""))
+
+            _md = sp.to_markdown(_plan)
+            _d1, _d2 = st.columns([1, 3])
+            _d1.download_button("⬇ 下载 Markdown", data=_md.encode("utf-8"),
+                                file_name=f'备考方案_{_plan["short"]}.md', mime="text/markdown",
+                                key="sp_dl_md")
+            if _d2.button("💾 生成 Word（.docx）并保存到「备考冲刺资料」", key="sp_save"):
+                _p_md = sp.save_markdown(_plan)
+                _p_docx = sp.save_docx(_plan, _p_md)
+                if _p_docx:
+                    st.success(f"已保存：{_p_docx}")
+                else:
+                    st.warning(f"Word 生成失败，但 Markdown 已存到：{_p_md}")
+
+            with st.container(height=560):
+                st.markdown(_md)
 
         st.divider()
         st.markdown("**✅ 打卡（本地保存，按目标分别记录）**")
+        from ihub import study
+        _tname = _plan["target_raw"] if _plan else _target
         checks = study.load_checks()
-        cur = dict(checks.get(tname, {}))
+        cur = dict(checks.get(_tname, {}))
         changed = False
         for i, it in enumerate(study.CHECK_ITEMS):
-            v = st.checkbox(it, value=bool(cur.get(str(i), False)), key=f"chk_{tname}_{i}")
+            v = st.checkbox(it, value=bool(cur.get(str(i), False)), key=f"chk_{_tname}_{i}")
             if v != bool(cur.get(str(i), False)):
                 cur[str(i)] = v
                 changed = True
         if changed:
-            checks[tname] = cur
+            checks[_tname] = cur
             study.save_checks(checks)
             st.caption("已保存进度 ✅")
 

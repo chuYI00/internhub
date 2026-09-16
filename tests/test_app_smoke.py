@@ -168,6 +168,22 @@ def main() -> int:
     check("页面说明了 A 级才能当官方投递按钮",
           "只有 A 级" in _blob or "A 级" in _blob, None)
 
+    print("[8] 第 4 步：备考方案生成器")
+    check("④ 备考方案页有生成器区块", "备考方案生成器" in _blob, None)
+    _sb_keys = [s.key for s in at.selectbox]
+    _in_keys = [t.key for t in at.text_input] + [n.key for n in at.number_input]
+    check("生成器有目标单位选择框", "sp_target" in _sb_keys, _sb_keys[:14])
+    check("生成器有岗位输入框（决定专业知识考哪套）", "sp_role" in _in_keys, _in_keys[:14])
+    check("生成器有考试日期输入框", "sp_date" in _in_keys, _in_keys[:14])
+    check("生成器有每天可学小时数", "sp_hours" in _in_keys, _in_keys[:14])
+    check("生成器有『生成备考方案』按钮", "sp_gen" in _keys_all, _keys_all[-14:])
+    check("生成器说明里点明了「考什么/抓什么/每天干什么/背什么」",
+          "该抓什么可以放弃什么" in _blob, None)
+    check("备考页保留了打卡清单（本地保存进度）",
+          "打卡" in _blob, None)
+    check("烟草成品作战方案仍可下载（没被生成器挤掉）",
+          any("下载 Word" in str(d.label) for d in at.get("download_button")), None)
+
     # 清理临时库
     for p in (tmp_db, tmp_db + "-wal", tmp_db + "-shm"):
         try:
