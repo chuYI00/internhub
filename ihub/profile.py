@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 """个人资料（用于生成投递理由与定制简历）。
 
-- 默认值是内置示例（罗广睿），任何使用者都可以在网页「👤 我的资料」里
+- 默认值是内置示例，任何使用者都可以在网页「👤 我的资料」里
   上传自己的简历 / 修改字段后保存 → 覆盖 data/profile.json。
 - 资料只保存在本机项目 data/ 目录（已在 .gitignore 中排除），不上传任何服务器。
+- 注意：这里的 DEFAULT 是**示例占位**，请勿把你的真实手机号/邮箱写进来——
+  本仓库是公开的，真实资料请只放在 data/profile.json（已 gitignore），网页「👤 我的资料」里改。
 """
 import json
 import os
@@ -13,11 +15,11 @@ from . import config
 PROFILE_PATH = os.path.join(config.DATA_DIR, "profile.json")
 
 DEFAULT = {
-    "name": "罗广睿",
+    "name": "示例同学",
     "gender": "男",
     "city": "云南大理",
-    "phone": "13500135000",
-    "email": "2810845176@qq.com",
+    "phone": "13800000000",
+    "email": "example@example.com",
     "school": "中国民航大学",
     "major": "物联网工程",
     "degree": "本科",

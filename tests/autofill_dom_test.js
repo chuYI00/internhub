@@ -17,6 +17,15 @@ const { El, fieldRow, input, select, labelTable, radioGroup, buildSandbox } = do
 const NAME = process.argv[2] || path.join(__dirname, '..', '网申助手.user.js');
 const code = fs.readFileSync(NAME, 'utf8');
 
+// 期望值一律从生成脚本内置的资料里读出来（不再硬编码姓名/手机/邮箱）：
+// 一来公开仓库不该出现个人信息，二来改了 data/profile.json 测试也不会假失败。
+const EXP = (() => {
+  const r = new El('body');
+  const sb = buildSandbox(r);
+  vm.runInContext(code, vm.createContext(sb), { filename: NAME });
+  return sb.window.__IHUB_AUTOFILL__.profile();
+})();
+
 function run(root) {
   const sandbox = buildSandbox(root);
   vm.runInContext(code, vm.createContext(sandbox), { filename: NAME });
@@ -47,9 +56,9 @@ console.log('[1] 现代 div 表单：placeholder / name / label[for]');
   const { api } = run(root);
   const st = api.fillDoc(sandboxDoc(root), 'empty');
   const vals = root.descendants.filter(d => d.tagName === 'INPUT' || d.tagName === 'TEXTAREA').map(d => d.value);
-  check('姓名填入', vals[0] === '罗广睿', vals[0]);
-  check('手机号填入', vals[1] === '13500135000', vals[1]);
-  check('邮箱填入', vals[2] === '2810845176@qq.com', vals[2]);
+  check('姓名填入', vals[0] === EXP.name, vals[0]);
+  check('手机号填入', vals[1] === EXP.phone, vals[1]);
+  check('邮箱填入', vals[2] === EXP.email, vals[2]);
   check('label[for] 关联的学校填入', vals[3] === '中国民航大学', vals[3]);
   check('专业填入', vals[4] === '物联网工程', vals[4]);
   check('自我评价填入长文本', String(vals[5]).includes('AI'), String(vals[5]).slice(0, 30));
@@ -70,10 +79,10 @@ console.log('[2] 老式表格表单：<td>标签</td><td><input></td>');
   const { api } = run(root);
   api.fillDoc(sandboxDoc(root), 'empty');
   const vals = root.descendants.filter(d => d.tagName === 'INPUT').map(d => d.value);
-  check('姓名', vals[0] === '罗广睿', vals[0]);
+  check('姓名', vals[0] === EXP.name, vals[0]);
   check('性别', vals[1] === '男', vals[1]);
-  check('联系电话', vals[2] === '13500135000', vals[2]);
-  check('毕业院校', vals[3] === '中国民航大学', vals[3]);
+  check('联系电话', vals[2] === EXP.phone, vals[2]);
+  check('毕业院校', vals[3] === EXP.school, vals[3]);
   check('专业名称', vals[4] === '物联网工程', vals[4]);
 }
 
@@ -132,7 +141,7 @@ console.log('[5] 只填空 vs 覆盖全部');
 
   api.fillDoc(sandboxDoc(root), 'overwrite');
   vals = root.descendants.filter(d => d.tagName === 'INPUT').map(d => d.value);
-  check('「覆盖全部」会改写已有内容', vals[0] === '罗广睿', vals[0]);
+  check('「覆盖全部」会改写已有内容', vals[0] === EXP.name, vals[0]);
 }
 
 /* ---------- 6. 回归：不许把大容器文字当字段名（v1 的 bug） ---------- */
@@ -205,7 +214,7 @@ console.log('[9] iframe：子框架收到 postMessage 后填写');
   const before = root.descendants.filter(d => d.tagName === 'INPUT')[0].value;
   handlers[0]({ data: { __ihub: 'fill', mode: 'empty' }, source: { fake: true } });
   const after = root.descendants.filter(d => d.tagName === 'INPUT')[0].value;
-  check('收到消息后完成填写', before === '' && after === '罗广睿', [before, after]);
+  check('收到消息后完成填写', before === '' && after === EXP.name, [before, after]);
   // 自己发的消息要忽略，避免重复填
   const again = handlers[0];
   again({ data: { __ihub: 'fill', mode: 'empty' }, source: sandbox.window });
@@ -270,9 +279,9 @@ console.log('[12] 网申书签（javascript: 免插件版）');
     catch (e) { threw = e.message; }
     const vals = root.descendants.filter(d => d.tagName === 'INPUT').map(d => d.value);
     check('书签执行不报错', threw === null, threw);
-    check('书签版填上了姓名', vals[0] === '罗广睿', vals[0]);
-    check('书签版填上了电话', vals[1] === '13500135000', vals[1]);
-    check('书签版填上了学校', vals[2] === '中国民航大学', vals[2]);
+    check('书签版填上了姓名', vals[0] === EXP.name, vals[0]);
+    check('书签版填上了电话', vals[1] === EXP.phone, vals[1]);
+    check('书签版填上了学校', vals[2] === EXP.school, vals[2]);
     check('弹出的提示里有"已填 3 个字段"', /已填 3 个字段/.test(String(sandbox.__alert)), sandbox.__alert);
   }
 }
