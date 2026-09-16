@@ -45,8 +45,18 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 # 标题里出现这些词 = 和烟草系统有关
 TOBACCO_KW = ["烟草", "中烟", "卷烟", "烟叶", "专卖局", "红塔", "红云红河", "烟机",
               "烟草公司", "复烤", "卷烟厂"]
-# 你重点要盯的地域/批次
+# 你重点要盯的地域/批次（明确过：昆明 + 大理都投）
 YUANNAN_KW = ["云南", "云烟", "红塔", "红云红河", "昆明", "大理", "曲靖", "玉溪", "红河", "楚雄"]
+
+# ── 岗位取向：你明确要「偏技术、不要一线」────────────────────────────
+# 命中这些 = 对口（技术和专业管理岗）
+ROLE_TECH_KW = ["数字信息", "信息化", "信息技术", "信息中心", "计算机", "软件", "网络", "网络安全",
+                "大数据", "人工智能", "数据", "系统", "自动化", "电气", "机电", "设备", "仪表",
+                "智能制造", "智能", "运维", "研发", "技术", "工程师", "专业技术", "管理类", "网信"]
+# 命中这些 = 一线/操作岗（你说了不投，自动降级，别在名单里浪费注意力）
+ROLE_FRONT_KW = ["生产操作", "操作类", "操作岗", "车间", "一线", "烟叶收购", "收购", "分拣", "包装",
+                 "司炉", "辅助", "安保", "消防", "稽查", "访销", "客户经理", "送货", "烟站",
+                 "仓库", "养护", "厨师", "司机", "卷烟机操作"]
 
 STATE_PATH = os.path.join(config.DATA_DIR, "tobacco_seen.json")
 
@@ -62,6 +72,26 @@ _PLATFORM_RE = re.compile(
     r"https?://[A-Za-z0-9.\-]+(?:zhaopin|hotjob|zhiye|51job|liepin|moka|feishu|myworkday|"
     r"tal\.cn|tobacco|chinahr|ciic|zhaopin\.com)[A-Za-z0-9./_\-?=&%]*", re.I)
 _QUOTA_RE = re.compile(r"只能(?:选择|报考|应聘)\s*1\s*个|重复(?:报名|投递|应聘)|只能报(?:考)?一个")
+
+# 公告正文容器（实测：国家局详情页正文在 div.conZhDy 里，到 div.contentBotshare 结束）
+_BODY_START_RE = re.compile(r'<(?:div|section)[^>]+(?:id|class)="[^"]*conZhDy[^"]*"', re.I)
+_BODY_END_RE = re.compile(r'<(?:div|section)[^>]+(?:id|class)="[^"]*(?:contentBotshare|conXxlyShare)[^"]*"', re.I)
+
+
+def _article_text(html: str) -> str:
+    """只取**公告正文**，不要整页文字。
+
+    整页文字里带着网站导航（导航里就有「信息化」「招聘」这些词），
+    用它判断岗位取向会假命中 —— 比如一份"生产操作类"公告也会被判成技术类。
+    """
+    m = _BODY_START_RE.search(html or "")
+    if not m:
+        return _clean(html)
+    gt = html.find(">", m.start())                    # 跳过开标签本身
+    start = (gt + 1) if gt != -1 else m.start()
+    endm = _BODY_END_RE.search(html, start)
+    seg = html[start: endm.start() if endm else len(html)]
+    return _clean(seg)
 
 
 def _clean(t: str) -> str:
@@ -88,8 +118,25 @@ def kind_of(title: str) -> str:
     return "其他"
 
 
-def priority_of(title: str) -> int:
-    """优先级 1~5：云南 + 2027届/应届 最高。"""
+def role_fit(text: str) -> tuple[str, str]:
+    """判断岗位取向 —— 你明确过：**要偏技术，不要一线操作岗**。
+
+    返回 (类型, 一句话说明)，用于自动给你排优先级、并在页面上直接标出来。
+    """
+    t = text or ""
+    tech = [k for k in ROLE_TECH_KW if k in t]
+    front = [k for k in ROLE_FRONT_KW if k in t]
+    if front and not tech:
+        return "⛔ 一线/操作类", f'含「{front[0]}」—— 你说了不要一线，已降级'
+    if tech and front:
+        return "⚠️ 混合（要核对岗位表）", f'既有「{tech[0]}」也有「{front[0]}」，进公告看具体岗位'
+    if tech:
+        return "✅ 技术/管理类", f'含「{tech[0]}」—— 与电子信息与自动化最对口'
+    return "· 未标明", "标题没写岗位类型，进公告看一眼"
+
+
+def priority_of(title: str, text: str = "") -> int:
+    """优先级 1~5：云南/大理 + 2027届/应届 + **技术类** 最高；一线操作岗大幅降级。"""
     t = title or ""
     p = 2
     if any(k in t for k in YUANNAN_KW):
@@ -99,6 +146,11 @@ def priority_of(title: str) -> int:
     if "应届" in t or "高校毕业" in t:
         p += 1
     if kind_of(t) != "招聘公告":
+        p -= 2
+    role, _ = role_fit(f"{title} {text}")
+    if role.startswith("✅"):
+        p += 1
+    elif role.startswith("⛔"):
         p -= 2
     return max(1, min(5, p))
 
@@ -132,6 +184,7 @@ def fetch_list(pages: int = 2, timeout: int = 12) -> list[dict]:
             seen.add(full)
             dm = _DATE_URL_RE.search(full)
             published = f"{dm.group(1)}-{dm.group(2)}" if dm else ""
+            role, role_note = role_fit(title)
             out.append({
                 "id": hashlib.md5(full.encode("utf-8")).hexdigest()[:16],
                 "title": title,
@@ -140,6 +193,8 @@ def fetch_list(pages: int = 2, timeout: int = 12) -> list[dict]:
                 "published": published,
                 "kind": kind_of(title),
                 "priority": priority_of(title),
+                "role": role,
+                "role_note": role_note,
                 "is_yunnan": any(k in title for k in YUANNAN_KW),
             })
     return out
@@ -195,14 +250,19 @@ def parse_window(text: str) -> dict:
 
 
 def fetch_detail(link: str, timeout: int = 12) -> dict:
+    """抓公告详情：报名窗口 + 报名平台 + 正文开头（用于判断岗位类型）。"""
     try:
         r = requests.get(link, headers={"User-Agent": UA}, timeout=timeout)
         r.encoding = r.apparent_encoding or "utf-8"
         html = r.text or ""
     except Exception:
         return {}
-    body = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", html, flags=re.S | re.I)
-    return parse_window(_clean(body))
+    body = _article_text(html)          # 只取正文，别把导航算进去
+    res = parse_window(body)
+    # 正文开头留着：公告里常写「本次招聘岗位：数字信息类、机电自动化类…」
+    # 或明确写「生产操作类岗位」—— 用来判断是不是你要的技术岗。
+    res["text_head"] = body[:1500]
+    return res
 
 
 # ────────────────────── 状态（已见集合） ──────────────────────
@@ -227,10 +287,11 @@ def save_seen(seen: dict) -> None:
 # ────────────────────── 主流程 ──────────────────────
 
 def scan(pages: int = 2, detail_top: int = 8, only_recruit: bool = False,
-         dry_run: bool = False) -> dict:
+         tech_only: bool = False, dry_run: bool = False) -> dict:
     """扫一遍并和"已见"比对。
 
     detail_top：对前 N 条**新**公告抓详情页，提取报名窗口（要发 N 次请求，别设太大）。
+    tech_only：只看技术/管理类（滤掉一线操作岗）—— 你明确过不投一线，默认在页面上是勾选的。
     返回 {"checked_at", "new": [...], "all": [...], "total_seen"}，新条目带 `is_new=True`。
     """
     items = fetch_list(pages=pages)
@@ -241,7 +302,15 @@ def scan(pages: int = 2, detail_top: int = 8, only_recruit: bool = False,
     new.sort(key=lambda x: -x["priority"])
     for i, it in enumerate(new):
         if i < max(0, detail_top):
-            it.update(fetch_detail(it["link"]))
+            det = fetch_detail(it["link"])
+            it.update(det)
+            # 拿到正文后用"标题 + 正文开头"重判岗位取向：
+            # 很多公告标题只写"招聘公告"，岗位类型要看正文里的岗位表。
+            hit_text = f'{it["title"]} {det.get("text_head", "")}'
+            role, note = role_fit(hit_text)
+            it["role"], it["role_note"] = role, note
+            it["priority"] = priority_of(it["title"], det.get("text_head", ""))
+            it.pop("text_head", None)          # 别把正文塞进报告里
 
     for it in new:
         it["is_new"] = True
@@ -250,6 +319,9 @@ def scan(pages: int = 2, detail_top: int = 8, only_recruit: bool = False,
 
     if only_recruit:
         new = [x for x in new if x["kind"] == "招聘公告"] or new
+    if tech_only:
+        keep = [x for x in new if not str(x.get("role", "")).startswith("⛔")]
+        new = keep or new
 
     if not dry_run:
         now = _dt.datetime.now().isoformat(timespec="seconds")
@@ -307,6 +379,8 @@ def as_text(result: dict = None, limit: int = 100) -> str:
         L.append("-" * 56)
         for it in by_priority(r["new"]):
             L.append(f'{stars(it["priority"])} [{it["kind"]}] {it["title"]}')
+            if it.get("role"):
+                L.append(f'    岗位取向：{it["role"]}　{it.get("role_note", "")}')
             L.append(f'    {it["link"]}')
             if it.get("apply_from") or it.get("apply_to"):
                 L.append(f'    报名窗口：{it.get("apply_from") or "?"} ~ {it.get("apply_to") or "?"}'
@@ -324,8 +398,10 @@ def as_text(result: dict = None, limit: int = 100) -> str:
     L.append("-" * 56)
     for it in by_priority(r["all"])[:limit]:
         flag = "🆕" if it.get("is_new") else "  "
-        L.append(f'{flag} {stars(it["priority"])} {it["title"]}')
+        L.append(f'{flag} {stars(it["priority"])} {it.get("role", "")} {it["title"]}')
     L.append("")
+    L.append("岗位取向：✅技术/管理类 = 与你专业对口，优先投；⛔一线/操作类 = 你已明确不投，只作参考；")
+    L.append("          ⚠️混合 = 公告里技术和操作岗都有，进公告看岗位表再决定。")
     L.append("⚠️ 烟草铁律：同一批次只能报 1 个单位 1 个岗位，**重复投递直接取消资格**；")
     L.append("   网申窗口通常只有 7~10 天，看到公告当天就要动手。投前先在本工具「📮 网申跟踪」记一笔。")
     return "\n".join(L)

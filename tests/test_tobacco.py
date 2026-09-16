@@ -65,6 +65,36 @@ check("只有截止日时也能兜住", w2["apply_to"] == "2026-10-15", w2["appl
 w3 = T.parse_window("报名平台：http://www.tobacco.gov.cn/gjyc/zpxx/list.shtml 请点击查看")
 check("不把国家局自己的导航链接当报名平台", w3["apply_platform"] == "", w3["apply_platform"])
 
+print("[4b] 岗位取向：要技术、不要一线（用户明确要求）")
+check("数字信息类 → ✅ 技术/管理类", T.role_fit("本次招聘岗位为数字信息类、机电自动化类")[0].startswith("✅"),
+      T.role_fit("本次招聘岗位为数字信息类"))
+check("生产操作类 → ⛔ 一线", T.role_fit("本次招聘均为生产操作类岗位，车间一线")[0].startswith("⛔"),
+      T.role_fit("生产操作类岗位"))
+check("信息和操作都有 → ⚠️ 混合",
+      T.role_fit("既有信息化岗也有生产操作类岗")[0].startswith("⚠️"),
+      T.role_fit("既有信息化岗也有生产操作类岗"))
+check("技术类提优先级", T.priority_of("某省2027年招聘公告", "岗位为数字信息类") >
+      T.priority_of("某省2027年招聘公告", "岗位为生产操作类"),
+      [T.priority_of("x", "数字信息类"), T.priority_of("x", "生产操作类")])
+check("一线操作岗被压到 2★ 及以下",
+      T.priority_of("河南省烟草专卖局2027年招聘公告", "本次招聘均为生产操作类岗位") <= 2)
+
+_html = """<html><body>
+<div class="nav">首页 专卖 许可 卷烟 烟叶 信息化 招聘 大数据 人工智能 热搜词：招聘</div>
+<div class="conZhDy">
+  <p>河南省烟草专卖局（公司）2027年高校毕业生招聘公告</p>
+  <p>本次招聘均为生产操作类岗位，从事卷烟生产车间一线操作工作。</p>
+  <p>报名时间：2026年11月20日9时至2026年11月28日17时，逾期不再受理。</p>
+  <p>应聘人员只能选择1个岗位应聘，重复报名无效。</p>
+</div>
+<div class="contentBotshare">版权所有 国家烟草专卖局</div>
+</body></html>"""
+_art = T._article_text(_html)
+check("正文切片不含网站导航（否则会假命中「信息化」）", "首页" not in _art and "信息化" not in _art, _art[:60])
+check("切片后仍能认出「生产操作类」", T.role_fit(_art)[0].startswith("⛔"), T.role_fit(_art)[0])
+check("切片后窗口仍解析正确",
+      T.parse_window(_art)["apply_to"] == "2026-11-28", T.parse_window(_art)["apply_to"])
+
 print("[5] 新增比对（已见 / 未见）")
 _FAKE = [
     {"id": "aaa", "title": "云南省烟草专卖局2027年招聘公告", "link": "http://x/aaa",

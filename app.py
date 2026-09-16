@@ -991,15 +991,20 @@ def main():
                    "网申窗口通常只有 **7~10 天**（实测公告原文「逾期不再受理」）。看到公告当天就要动手，"
                    "投前先在「📮 网申跟踪」记一笔。")
 
+        st.info("**你的取向**：偏技术、不要一线操作岗；**昆明和大理都投**。"
+                "下面的岗位取向标记就是按这个规则自动判的（✅技术/管理类 加分，⛔一线/操作类 降级）。")
         _seen = TB.load_seen()
         _c1, _c2, _c3 = st.columns([1, 1, 2])
         _deep = _c1.checkbox("顺便抓报名窗口", value=True, key="tb_detail",
                              help="对新公告抓详情页，提取「报名时间 / 报名平台 / 是否限制报考岗位数」，稍慢几秒")
+        _tech = _c1.checkbox("只看技术/管理类", value=True, key="tb_tech",
+                             help="勾上＝把一线操作岗（生产操作类/车间/烟叶收购…）从「新增」里滤掉，"
+                                  "它们仍会留在下面的全部公告表里")
         if _c2.button("🔍 立即扫描一次", type="primary", key="tb_scan"):
             with st.spinner("正在扫描国家烟草专卖局招聘专栏…"):
                 try:
                     st.session_state["tb_res"] = TB.scan(
-                        pages=2, detail_top=8 if _deep else 0)
+                        pages=2, detail_top=8 if _deep else 0, tech_only=_tech)
                 except Exception as e:
                     st.error(f"扫描失败：{e}")
         _c3.caption(f"已累计记录 {len(_seen)} 条历史公告（用于算「新增」）。"
@@ -1028,8 +1033,11 @@ def main():
             else:
                 st.markdown(f"##### 🆕 本轮新增 {len(_new)} 条")
             for _i, it in enumerate(_new):
-                with st.expander(f'{TB.stars(it["priority"])}　[{it["kind"]}]　{it["title"][:46]}'):
+                _role = it.get("role") or ""
+                with st.expander(f'{TB.stars(it["priority"])}　{_role}　[{it["kind"]}]　{it["title"][:42]}'):
                     st.markdown(f'**公告原文**：{it["link"]}')
+                    if _role:
+                        st.markdown(f'**岗位取向**：{_role}　{it.get("role_note", "")}')
                     if it.get("published"):
                         st.caption(f'发布月份：{it["published"]}　性质：{it["kind"]}　'
                                    f'优先级：{TB.stars(it["priority"])}')
@@ -1062,6 +1070,7 @@ def main():
             for it in TB.by_priority(_res["all"]):
                 _tb_rows.append({
                     "优先级": TB.stars(it["priority"]),
+                    "岗位": it.get("role") or "·",
                     "性质": it["kind"],
                     "公告": it["title"][:60],
                     "发布": it.get("published") or "—",

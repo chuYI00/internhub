@@ -28,6 +28,8 @@ def main() -> int:
     ap.add_argument("--all", action="store_true", help="连全部公告一起打印")
     ap.add_argument("--json", action="store_true", help="输出 JSON")
     ap.add_argument("--only-recruit", action="store_true", help="只有招聘公告才算新增（过滤公示）")
+    ap.add_argument("--tech-only", action="store_true",
+                    help="只看技术/管理类岗位（滤掉一线操作岗；你的定位是偏技术非一线）")
     ap.add_argument("--reset", action="store_true", help="清空已见记录")
     args = ap.parse_args()
 
@@ -38,7 +40,8 @@ def main() -> int:
         except FileNotFoundError:
             print("本来就没有已见记录。")
 
-    res = T.scan(pages=args.pages, detail_top=args.detail, only_recruit=args.only_recruit)
+    res = T.scan(pages=args.pages, detail_top=args.detail,
+                 only_recruit=args.only_recruit, tech_only=args.tech_only)
 
     if args.json:
         print(json.dumps(res, ensure_ascii=False, indent=1))
@@ -52,6 +55,8 @@ def main() -> int:
         print("=" * 62)
         for it in new:
             print(f'{T.stars(it["priority"])} [{it["kind"]}] {it["title"]}')
+            if it.get("role"):
+                print(f'    岗位取向：{it["role"]}　{it.get("role_note", "")}')
             print(f'    {it["link"]}')
             if it.get("apply_from") or it.get("apply_to"):
                 seg = (f'    报名窗口：{it.get("apply_from") or "?"} ~ {it.get("apply_to") or "?"}'
@@ -77,6 +82,7 @@ def main() -> int:
     if args.all:
         print(T.as_text(res))
 
+    print("岗位取向：✅技术/管理类=优先投　⛔一线/操作类=你不投，仅参考　⚠️混合=进公告看岗位表")
     print("⚠️ 烟草铁律：同批次只能报 1 个单位 1 个岗位，重复投递取消资格；"
           "窗口通常只有 7~10 天，看到公告当天就动手。")
     return 0
