@@ -991,6 +991,44 @@ def main():
                    "网申窗口通常只有 **7~10 天**（实测公告原文「逾期不再受理」）。看到公告当天就要动手，"
                    "投前先在「📮 网申跟踪」记一笔。")
 
+        with st.expander("🎯 烟草岗位怎么选（合适 / 轻松 / 钱多 —— 权重可自己调）", expanded=False):
+            from ihub import tobacco_roles as TR
+            st.caption("烟草公告的岗位表动辄几十类。这里按你要的三个维度打分（1~5★），"
+                       "**拖滑条改权重，排序立刻变** —— 但结论其实很稳：技术岗通吃，一线岗垫底。")
+            _w1, _w2, _w3 = st.columns(3)
+            _wf = _w1.slider("合适（专业对口）", 0.0, 1.0, 0.40, 0.05, key="tr_wf")
+            _wl = _w2.slider("轻松（强度低）", 0.0, 1.0, 0.30, 0.05, key="tr_wl")
+            _wp = _w3.slider("钱多", 0.0, 1.0, 0.30, 0.05, key="tr_wp")
+            st.success(TR.summary_text(_wf, _wl, _wp))
+            _rk = TR.ranked(_wf, _wl, _wp)
+            st.dataframe(
+                pd.DataFrame([{
+                    "排名": i,
+                    "岗位类别": r["name"],
+                    "总分": r["score"],
+                    "合适": TR.stars(r["fit"]),
+                    "轻松": TR.stars(r["light"]),
+                    "钱多": TR.stars(r["pay"]),
+                    "干什么": r["duty"][:34],
+                } for i, r in enumerate(_rk, 1)]),
+                hide_index=True, width="stretch")
+            for _i, _r in enumerate(_rk[:3], 1):
+                st.markdown(f'**{_i}. {_r["name"]}**（{_r["score"]} 分）'
+                            f'　合适{TR.stars(_r["fit"])} 轻松{TR.stars(_r["light"])} '
+                            f'钱多{TR.stars(_r["pay"])}')
+                st.caption(f'干什么：{_r["duty"]}')
+                st.caption(f'云南情况：{_r["yunnan"]}')
+                st.caption(f'⚠️ 坑：{_r["trap"]}')
+            with st.expander("看全部 9 类的详细说明 / 导出", expanded=False):
+                st.markdown(TR.as_text(_wf, _wl, _wp))
+            st.download_button("⬇ 下载岗位推荐表（txt）",
+                               data=TR.as_text(_wf, _wl, _wp).encode("utf-8"),
+                               file_name="烟草岗位推荐_合适轻松钱多.txt",
+                               mime="text/plain", key="tr_dl")
+            st.caption("⚠️ 分数是按公开信息与行业普遍情况整理的**参考值，不是官方数据**；"
+                       "各类别各省叫法不同（信息化类/计算机类），以当年公告岗位表为准，"
+                       "报名前务必核对专业目录要求。")
+
         st.info("**你的取向**：偏技术、不要一线操作岗；**昆明和大理都投**。"
                 "下面的岗位取向标记就是按这个规则自动判的（✅技术/管理类 加分，⛔一线/操作类 降级）。")
         _seen = TB.load_seen()

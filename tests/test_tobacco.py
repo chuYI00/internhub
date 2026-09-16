@@ -145,6 +145,37 @@ with tempfile.TemporaryDirectory() as d:
                                               (now + dt.timedelta(days=9)).strftime("%Y年%m月%d日"))
                          )["days_left"] == 9)
 
+    print("[6b] 岗位类型推荐（合适 / 轻松 / 钱多）")
+    from ihub import tobacco_roles as TR                                  # noqa: E402
+    _rk = TR.ranked()
+    check("至少 8 类岗位", len(_rk) >= 8, len(_rk))
+    check("默认权重下第一名是数字信息类/信息化岗",
+          "数字信息" in _rk[0]["name"], _rk[0]["name"])
+    check("前 3 名都是技术类（合适 ★★★★ 以上）", all(r["fit"] >= 4 for r in _rk[:3]),
+          [(r["name"], r["fit"]) for r in _rk[:3]])
+    check("生产操作类垫底", "生产操作" in _rk[-1]["name"], _rk[-1]["name"])
+    check("每个维度都是 1~5 分", all(1 <= r[d] <= 5 for r in TR.ROLES for d in ("fit", "light", "pay")))
+    check("总分落在 2~10", all(2 <= r["score"] <= 10 for r in _rk), [r["score"] for r in _rk])
+
+    # 换权重：钱多优先，技术岗仍应在前，一线仍应垫底
+    _rk2 = TR.ranked(0.2, 0.2, 0.6)
+    check("改成「钱多优先」后前 3 名仍是技术岗", all(r["fit"] >= 4 for r in _rk2[:3]),
+          [(r["name"], r["score"]) for r in _rk2[:3]])
+    _rk3 = TR.ranked(0.1, 0.8, 0.1)
+    check("改成「轻松优先」后一线操作岗仍在后半段",
+          [r["name"] for r in _rk3].index(_rk3[-1]["name"]) >= len(_rk3) - 3,
+          [r["name"] for r in _rk3][-3:])
+    check("结论文案里点名了第一名", _rk[0]["name"][:4] in TR.summary_text())
+    check("按关键词能归类（生产操作类）",
+          TR.by_alias("本次招聘均为生产操作类岗位")["fit"] == 2)
+    check("按关键词能归类（数字信息类）", "数字信息" in TR.by_alias("数字信息类岗位")["name"])
+    check("行政助理归到综合管理类（本就该归类）",
+          TR.by_alias("某公司行政助理")["fit"] == 2, TR.by_alias("某公司行政助理"))
+    check("完全无关的岗位名不硬猜（返回 None）", TR.by_alias("机关食堂厨师") is None)
+    _txt = TR.as_text()
+    check("文本报告含 9 类的分数表", "总分" in _txt and "合适" in _txt)
+    check("文本报告声明了「非官方数据」", "不是官方数据" in _txt)
+
     print("[7] 文本报告")
     _txt = T.as_text(r4)
     check("报告含铁律提醒", "重复投递" in _txt or "取消资格" in _txt)
