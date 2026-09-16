@@ -30,7 +30,9 @@ class El {
   get classList() { return { contains: c => this._cls.has(c) }; }
   appendChild(c) { c.parentElement = this; this.children.push(c); return c; }
   appendText(t) { const e = new El('#text'); e._text = t; e.parentElement = this; this.children.push(e); return e; }
-  click() { this._clicked = true; if (typeof this.onclick === 'function') this.onclick(); }
+  // 真实 DOM 里 click() 会触发 addEventListener('click') 注册的处理器（自绘下拉就靠这个），
+  // 打桩里也必须一致，否则"点开下拉再点选项"这条链路测不出来。
+  click() { this._clicked = true; if (typeof this.onclick === 'function') this.onclick(); this.dispatchEvent({ type: 'click' }); }
   get textContent() {
     if (this._ownText !== undefined) return this._ownText;
     if (this.tagName === '#TEXT') return this._text;
@@ -363,6 +365,13 @@ function buildSandbox(root, opts) {
     Blob: class { constructor(parts) { this.parts = parts; } },
     URL: { createObjectURL: () => 'blob:x', revokeObjectURL: () => {} },
     Event: class { constructor(type, init) { this.type = type; Object.assign(this, init || {}); } },
+    MouseEvent: class { constructor(type, init) { this.type = type; Object.assign(this, init || {}); } },
+    // 剪贴板：把复制到的内容记在 __copied 里，测试就能断言"复制按钮真的把值复制走了"
+    navigator: {
+      clipboard: {
+        writeText: t => { (sandbox.__copied = sandbox.__copied || []).push(String(t)); return Promise.resolve(); },
+      },
+    },
     localStorage: {
       getItem: k => (store.has(k) ? store.get(k) : null),
       setItem: (k, v) => store.set(k, String(v)),

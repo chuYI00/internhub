@@ -53,7 +53,7 @@ def _packs() -> dict:
 
 
 _TEMPLATE = r"""// ==UserScript==
-// @name         网申助手 v3（本地·本人使用）
+// @name         网申助手 v4（本地·本人使用）
 // @namespace    internhub.local
 // @version      3.0
 // @description  在网申/校招表单页一键填入个人资料，可按岗位方向切换自我评价/技能；本人点击触发，不代登录、不代提交、不联网
@@ -414,11 +414,138 @@ _TEMPLATE = r"""// ==UserScript==
     return n;
   }
 
+  /* ============ 自绘控件（ATS 专用） ============
+     北森(hotjob)、Moka、飞书招聘、用友这些网申系统用的是 antd / element-ui 的自绘控件：
+     下拉不是 <select> 而是 div + 弹出层，单选不是 <input type=radio> 而是卡片 div。
+     光给它赋 value 无效 —— 必须真的"点开 → 点选项"。以下两个函数处理这一类。 */
+  var OPTION_SEL = '.ant-select-item-option,[role=option],.el-select-dropdown__item,' +
+    '.ivu-select-item,.van-picker-column__item,.ant-cascader-menu-item,.select-option,.dropdown-item';
+  var FAKE_SEL_BOXES = '[role=combobox],.ant-select,.el-select,.ivu-select,.ant-cascader';
+
+  // 自绘控件的容器文字 == 它当前的显示值（"请选择"），往上直接取容器文字会把
+  // 显示值当题目。这里跳过"文字与控件本身相同"的祖先层，直到祖先里出现了更多文字。
+  function boxLabel(b, doc) {
+    var parts = [labelOf(b, doc)];
+    var own = norm(visText(b));
+    var n = b.parentElement, d = 0;
+    while (n && d < 5) {
+      var t = visText(n);
+      if (t && t.length <= 80 && norm(t) !== own) { parts.push(t); break; }
+      n = n.parentElement; d++;
+    }
+    return parts.filter(Boolean).join(' | ');
+  }
+
+  function clickOption(want, doc) {
+    var opts;
+    try { opts = doc.querySelectorAll(OPTION_SEL); } catch (e) { return false; }
+    var hit = null;
+    Array.prototype.slice.call(opts).forEach(function (o) {
+      if (hit || !isVisible(o)) return;
+      var t = visText(o);
+      if (t && (norm(t) === norm(want) || looseMatch(want, t))) hit = o;
+    });
+    if (!hit) return false;
+    try { hit.click(); return true; } catch (e) { return false; }
+  }
+
+  // 返回"尝试点开的下拉数"。选项是点开后才渲染的，所以用 setTimeout 错开去点。
+  function fillFakeSelects(doc, prof, report) {
+    var boxes;
+    try { boxes = doc.querySelectorAll(FAKE_SEL_BOXES); } catch (e) { return 0; }
+    var pending = [];
+    Array.prototype.slice.call(boxes).forEach(function (b) {
+      if (!isVisible(b)) return;
+      // 外层内层都命中时只处理最外层（antd 结构：.ant-select > selector > input[role=combobox]）
+      var anc = (b.parentElement && b.parentElement.closest) ? b.parentElement.closest(FAKE_SEL_BOXES) : null;
+      if (anc) return;
+      var f = bestField(boxLabel(b, doc));
+      if (!f) return;
+      var val = prof[f.k];
+      if (!val) return;
+      var shown = visText(b);
+      if (shown && (norm(shown) === norm(val) || looseMatch(val, shown))) return;  // 已经是对的了
+      pending.push([b, val, f]);
+    });
+    if (!pending.length) return 0;
+    pending.forEach(function (p, i) {
+      try {
+        p[0].click();
+        p[0].dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      } catch (e) {}
+      setTimeout(function () {
+        if (clickOption(p[1], doc)) {
+          mark(p[0], true);
+          if (report) report.push(p[2].label + '→' + String(p[1]).slice(0, 12) + '（自绘下拉）');
+        }
+      }, 70 * (i + 1));
+    });
+    return pending.length;
+  }
+
+  // 卡片式单选（antd Radio / element Radio / 通用 role=radio）
+  function fillCardRadios(doc, prof, report) {
+    var items;
+    try {
+      items = doc.querySelectorAll('[role=radio],.ant-radio-wrapper,.el-radio,' +
+        '.ant-radio-button-wrapper,.el-radio-button,.ivu-radio-wrapper');
+    } catch (e) { return 0; }
+    var groups = [];
+    var CARD_SEL = '[role=radio],.ant-radio-wrapper,.el-radio,.ant-radio-button-wrapper,' +
+      '.el-radio-button,.ivu-radio-wrapper';
+    Array.prototype.slice.call(items).forEach(function (o) {
+      if (!isVisible(o)) return;
+      // 只保留"最内层"的选项元素：外层容器（label.ant-radio-wrapper 里还包着 span[role=radio]）
+      // 点它不一定有事件，点最里面的那层才是真的选中。
+      var inner = o.querySelectorAll ? o.querySelectorAll(CARD_SEL) : [];
+      if (inner && inner.length) return;
+      var host = null, n = o.parentElement, d = 0;
+      while (n && d < 3) {
+        if (controlCount(n) === 0 && n.querySelectorAll && n.querySelectorAll('[role=radio],.ant-radio-wrapper,.el-radio').length > 1) {
+          host = n; break;
+        }
+        n = n.parentElement; d++;
+      }
+      host = host || o.parentElement;
+      var g = null;
+      for (var i = 0; i < groups.length; i++) { if (groups[i].host === host) { g = groups[i]; break; } }
+      if (!g) { g = { host: host, opts: [] }; groups.push(g); }
+      g.opts.push(o);
+    });
+    var n = 0;
+    groups.forEach(function (g) {
+      // 选项容器本身只写着"男 女"，题目（"性别"）在更外层的表单项里 —— 往上找一层
+      var lab = visText(g.host);
+      var cur = norm(lab);
+      var anc = g.host.parentElement, d = 0;
+      while (anc && d < 4) {
+        var t = visText(anc);
+        if (t && norm(t) !== cur && t.length <= 80) { lab = t + ' ' + lab; break; }
+        anc = anc.parentElement; d++;
+      }
+      var f = bestField(lab.slice(0, 80));
+      if (!f) return;
+      var val = prof[f.k];
+      if (!val) return;
+      var hit = g.opts.filter(function (o) {
+        var t = visText(o);
+        return t && (norm(t) === norm(val) || looseMatch(val, t));
+      })[0];
+      if (!hit) return;
+      try {
+        hit.click(); mark(hit, true); n++;
+        if (report) report.push(f.label + '→' + String(val).slice(0, 12) + '（卡片单选）');
+      } catch (e) {}
+    });
+    return n;
+  }
+
   function fillDoc(doc, mode) {
     var prof = P();
     var onlyEmpty = mode !== 'overwrite';
     var report = [];
     var filled = fillRadios(doc, prof, onlyEmpty, report);
+    filled += fillCardRadios(doc, prof, report);      // 卡片式单选（自绘）
     collect(doc).forEach(function (el) {
       var t = String(attr(el, 'type') || 'text').toLowerCase();
       if (t === 'radio' || t === 'checkbox') return;
@@ -438,7 +565,9 @@ _TEMPLATE = r"""// ==UserScript==
       } catch (e) { ok = false; }
       if (ok) { mark(el, true); filled++; report.push(f.label + '→' + String(val).slice(0, 14)); }
     });
-    return { filled: filled, report: report };
+    // 自绘下拉：点开后选项才渲染，异步完成；这里只回报"尝试了几个"
+    var fake = fillFakeSelects(doc, prof, report);
+    return { filled: filled, report: report, fakeSelects: fake };
   }
 
   /* ==================== 跨 iframe ==================== */
@@ -462,6 +591,22 @@ _TEMPLATE = r"""// ==UserScript==
 
   /* ==================== 面板 ==================== */
   var panel = null, statusEl = null, listEl = null, dirSel = null;
+
+  function copyText(t) {
+    var s = String(t == null ? '' : t);
+    if (!s) return false;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(s); return true; }
+    } catch (e) {}
+    try {   /* 老浏览器 / iframe 里 clipboard 不可用时的兜底 */
+      var ta = document.createElement('textarea');
+      ta.value = s; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      var ok = document.execCommand && document.execCommand('copy');
+      document.body.removeChild(ta);
+      return !!ok;
+    } catch (e) { return false; }
+  }
 
   function el(tag, css, text) {
     var d = document.createElement(tag);
@@ -493,7 +638,20 @@ _TEMPLATE = r"""// ==UserScript==
         if (v === (BASE[f.k] || '')) setOverride(f.k, ''); else setOverride(f.k, v);
         refreshList();
       });
-      row.appendChild(tag); row.appendChild(inp);
+      // 每个字段一个复制按钮：遇到"填不进去"的奇葩页面（自绘控件、只读框、富文本编辑器），
+      // 直接复制粘贴也能把这一栏搞定 —— 这是"任何网页都能用"的兜底。
+      var cp = btn('📋', 'padding:2px 7px;font-size:11px;flex:0 0 auto', (function (key, label, box) {
+        return function () {
+          var v = (P()[key] || box.value || '');
+          var ok = copyText(v);
+          if (statusEl) {
+            statusEl.textContent = ok
+              ? '已复制「' + label + '」：' + String(v).slice(0, 24) + '… —— 到页面上粘贴即可'
+              : '复制失败，请手动选中输入框内容复制';
+          }
+        };
+      })(f.k, f.label, inp));
+      row.appendChild(tag); row.appendChild(inp); row.appendChild(cp);
       listEl.appendChild(row);
     });
   }
@@ -527,8 +685,10 @@ _TEMPLATE = r"""// ==UserScript==
     broadcast(mode);
     if (statusEl) {
       statusEl.textContent = '已填 ' + st.filled + ' 个字段' +
-        (st.filled ? '：' + st.report.slice(0, 6).join('，') + (st.report.length > 6 ? ' …' : '')
-                   : '（没有匹配到可填字段）');
+        (st.fakeSelects ? '，另有 ' + st.fakeSelects + ' 个自绘下拉已自动点选（稍等片刻）' : '') +
+        (st.filled || st.fakeSelects
+          ? '：' + st.report.slice(0, 6).join('，') + (st.report.length > 6 ? ' …' : '')
+          : '（没有匹配到可填字段）');
     }
     setTimeout(function () {
       if (statusEl && st.filled === 0) {
@@ -543,7 +703,7 @@ _TEMPLATE = r"""// ==UserScript==
       'box-shadow:0 8px 28px rgba(0,0,0,.2);font:13px/1.55 -apple-system,"Microsoft YaHei",sans-serif;color:#1f2328');
     var head = el('div', 'display:flex;align-items:center;justify-content:space-between;padding:8px 10px;' +
       'border-bottom:1px solid #eaeef2;background:#f6f8fa;border-radius:10px 10px 0 0');
-    head.appendChild(el('b', 'font-size:13px', '📝 网申助手 v3'));
+    head.appendChild(el('b', 'font-size:13px', '📝 网申助手 v4（ATS 兼容）'));
     var x = btn('收起', '', function () { panel.style.display = 'none'; if (fab) fab.style.display = 'block'; });
     head.appendChild(x);
     panel.appendChild(head);
