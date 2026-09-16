@@ -185,6 +185,46 @@ def main() -> int:
         check("链接列不是网址时会给出提醒",
               any("不是网址" in w for w in resB["warnings"]), resB["warnings"])
 
+        print("[5e] 飞书多维表格（连接器记录 → 岗位库）")
+        from ihub import feishu                                          # noqa: E402
+
+        info = feishu.parse_base_url(
+            "https://kcnrqqpruo3a.feishu.cn/base/Hmiibiihoav4SXs56Ufc6DkEnxq"
+            "?table=tblmZUlIlvcSgH3V&view=vew9fn2Zdf")
+        check("解出 app_token", info["app_token"] == "Hmiibiihoav4SXs56Ufc6DkEnxq", info)
+        check("解出 table_id", info["table_id"] == "tblmZUlIlvcSgH3V", info)
+        check("解出 view_id", info["view_id"] == "vew9fn2Zdf", info)
+        check("解出 host", info["host"] == "kcnrqqpruo3a.feishu.cn", info)
+
+        check("超链接取 URL 而不是显示文字",
+              feishu.cell_to_text({"link": "https://a.com/", "text": "点我"}) == "https://a.com/")
+        check("13 位毫秒时间戳还原成日期",
+              feishu.cell_to_text(1795795200000) == "2026-11-28",
+              feishu.cell_to_text(1795795200000))
+        check("多选取值拼接", feishu.cell_to_text(["技术类", "昆明"]) == "技术类 / 昆明")
+        check("复选 True → 是", feishu.cell_to_text(True) == "是")
+        check("富文本分段拼接", feishu.cell_to_text([{"text": "负责"}, {"text": "运维"}]) == "负责运维")
+        check("人员取姓名", feishu.cell_to_text([{"name": "张三"}]) == "张三")
+        check("空值与占位符都当空", feishu.cell_to_text(None) == "" and feishu.cell_to_text("-") == "")
+
+        _recs = [
+            {"record_id": "r1", "fields": {
+                "招聘单位": "云南中烟工业有限责任公司", "招聘岗位": "数字化产线运维工程师",
+                "工作城市": "昆明", "招聘批次": "2027届", "投递截止时间": 1795795200000,
+                "岗位链接": {"link": "https://www.ynzy-tobacco.com/", "text": "投递"},
+                "学历要求": "本科"}},
+        ]
+        _res = feishu.import_records(_recs, source="飞书桥接")
+        check("飞书记录能直接入库", _res["rows"] == 1 and _res.get("inserted") == 1, _res)
+        check("字段全部对齐（无告警）", not _res.get("warnings"), _res.get("warnings"))
+        _r = conn.execute("SELECT * FROM jobs WHERE source='飞书桥接'").fetchone()
+        check("入库内容正确（岗位/公司/城市/届别/截止/链接）",
+              _r and _r["title"] == "数字化产线运维工程师" and _r["company"] == "云南中烟工业有限责任公司"
+              and _r["city"] == "昆明" and _r["batch"] == "2027届"
+              and _r["deadline"] == "2026-11-28"
+              and _r["link"] == "https://www.ynzy-tobacco.com/", _r and dict(_r))
+        check("空记录不炸", feishu.import_records([])["rows"] == 0)
+
         print("[6] 制表符里带引号注释、以及分号分隔的导出")
         semi = "岗位;公司;城市\n数据采集工程师;某科技公司;昆明\n"
         res6 = importer.import_csv_text(semi, source="分号表")
