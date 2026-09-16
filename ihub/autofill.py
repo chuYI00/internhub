@@ -608,6 +608,63 @@ _TEMPLATE = r"""// ==UserScript==
     } catch (e) { return false; }
   }
 
+  // ───────── 投递台账（第 3 步重构：填完/投完当场记一笔，防"投了不知道投过"）─────────
+  // 油猴脚本碰不到 InternHub 的本地数据库，所以走**剪贴板**：
+  // 点「记录本次投递」→ 存进本机 localStorage → 点「复制待同步记录」→
+  // 回到网页「📮 投递与网申」页的粘贴框，粘贴即入库。
+  var LEDGER_KEY = 'ihub_ledger_v1';
+  var STAGES = ['未投', '已投', '笔试', '面试', 'Offer', '未通过'];
+
+  function readLedger() {
+    try { return JSON.parse(localStorage.getItem(LEDGER_KEY) || '[]') || []; }
+    catch (e) { return []; }
+  }
+  function writeLedger(arr) {
+    try { localStorage.setItem(LEDGER_KEY, JSON.stringify(arr.slice(-300))); } catch (e) {}
+  }
+
+  function guessCompany() {
+    // 优先用站点名 / 页面主标题；都是"猜"，面板里可以改
+    var cands = [];
+    var meta = document.querySelector('meta[property="og:site_name"],meta[name="application-name"]');
+    if (meta && meta.content) cands.push(meta.content);
+    var h1 = document.querySelector('h1,h2,.logo,[class*="logo"] img');
+    if (h1) cands.push(h1.getAttribute && h1.getAttribute('alt') || h1.textContent || '');
+    cands.push(document.title || '');
+    for (var i = 0; i < cands.length; i++) {
+      var t = String(cands[i] || '').trim();
+      if (!t) continue;
+      t = t.split(/[-_|｜·—–]/)[0].trim();
+      if (t.length >= 2 && t.length <= 30) return t;
+    }
+    try { return location.hostname.replace(/^www\./, ''); } catch (e) { return ''; }
+  }
+  function guessJob() {
+    var el2 = document.querySelector('h1,h2,[class*="job"][class*="title"],[class*="position"]');
+    var t = el2 ? String(el2.textContent || '').trim().slice(0, 40) : '';
+    return t || (document.title || '').slice(0, 40);
+  }
+  function today() {
+    var d = new Date();
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+  function ledgerTsv(arr) {
+    var cols = ['公司', '岗位', '城市', '状态', '投递日期', '链接', '备注'];
+    var out = [cols.join('\t')];
+    arr.forEach(function (r) {
+      out.push([r.company, r.title, r.city, r.stage, r.applied_at, r.url, r.note]
+        .map(function (v) { return String(v == null ? '' : v).replace(/\t/g, ' '); }).join('\t'));
+    });
+    return out.join('\n');
+  }
+  function ledgerNote(el2) {
+    var n = readLedger().length;
+    if (el2) el2.textContent = n
+      ? '本机已记 ' + n + ' 条待同步 —— 点「复制待同步记录」后，回 InternHub 的「📮 投递与网申」页粘进「📥 粘贴导入」框。'
+      : '还没有待同步记录。投完一家就在上面点「记录本次投递」。';
+  }
+
   function el(tag, css, text) {
     var d = document.createElement(tag);
     if (css) d.style.cssText = css;
@@ -725,7 +782,76 @@ _TEMPLATE = r"""// ==UserScript==
     }));
     body.appendChild(bar);
 
-    statusEl = el('div', 'color:#57606a;font-size:12px;margin-bottom:6px',
+    // ---- 📮 投递登记：填完/投完当场记一笔，回 InternHub 粘贴入库 ----
+    var lg = el('div', 'border-top:1px solid #eaeef2;margin-top:8px;padding-top:8px');
+    lg.appendChild(el('div', 'font-weight:600;font-size:12px;margin-bottom:4px',
+      '📮 投递登记（防"投了不知道投过"）'));
+    function lrow(label, val, ph) {
+      var w = el('div', 'display:flex;gap:6px;align-items:center;margin:3px 0');
+      w.appendChild(el('div', 'flex:0 0 52px;color:#57606a;font-size:12px', label));
+      var i2 = el('input', 'flex:1;min-width:0;padding:3px 6px;border:1px solid #d0d7de;border-radius:5px;font-size:12px');
+      i2.value = val || ''; i2.placeholder = ph || '';
+      w.appendChild(i2);
+      return { wrap: w, input: i2 };
+    }
+    var cComp = lrow('公司', guessCompany(), '投递的公司');
+    var cJob = lrow('岗位', guessJob(), '岗位名');
+    var cStage = el('div', 'display:flex;gap:6px;align-items:center;margin:3px 0');
+    cStage.appendChild(el('div', 'flex:0 0 52px;color:#57606a;font-size:12px', '状态'));
+    var stSel = el('select', 'flex:1;padding:3px 6px;border:1px solid #d0d7de;border-radius:5px;font-size:12px');
+    STAGES.forEach(function (s) {
+      var o = document.createElement('option'); o.value = s; o.textContent = s;
+      if (s === '已投') o.selected = true;
+      stSel.appendChild(o);
+    });
+    cStage.appendChild(stSel);
+    lg.appendChild(cComp.wrap); lg.appendChild(cJob.wrap); lg.appendChild(cStage);
+
+    var lbar = el('div', 'display:flex;gap:6px;flex-wrap:wrap;margin:5px 0');
+    lbar.appendChild(btn('📮 记录本次投递', 'background:#1a7f37;color:#fff;border-color:#1a7f37', function () {
+      var comp = cComp.input.value.trim() || guessCompany();
+      if (!comp) {
+        if (statusEl) statusEl.textContent = '先填「公司」名再记录（自动猜的没认出来）。';
+        return;
+      }
+      var arr = readLedger();
+      arr.push({
+        company: comp, title: cJob.input.value.trim(), city: '',
+        stage: stSel.value, applied_at: today(),
+        url: (location.href || '').slice(0, 300), note: '网申助手记录',
+      });
+      writeLedger(arr);
+      ledgerNote(ledgerStatus);
+      if (statusEl) statusEl.textContent = '已记下「' + comp +
+        '」。投完这家记得点「复制待同步记录」回 InternHub 入库。';
+    }));
+    lbar.appendChild(btn('📋 复制待同步记录', '', function () {
+      var arr = readLedger();
+      if (!arr.length) { if (statusEl) statusEl.textContent = '本机还没有待同步记录。'; return; }
+      var ok = copyText(ledgerTsv(arr));
+      if (statusEl) statusEl.textContent = ok
+        ? '已复制 ' + arr.length + ' 条 —— 回 InternHub「📮 投递与网申」页，粘进「📥 粘贴导入」框即可入库。'
+        : '复制失败，请在下面的记录框里手动选中复制。';
+      if (taEl) { taEl.value = ledgerTsv(arr); taEl.style.display = 'block'; }
+    }));
+    lbar.appendChild(btn('🗑 清空本机记录', '', function () {
+      writeLedger([]); ledgerNote(ledgerStatus);
+      if (taEl) { taEl.value = ''; taEl.style.display = 'none'; }
+      if (statusEl) statusEl.textContent = '已清空本机待同步记录（InternHub 里已入库的不会删）。';
+    }));
+    lg.appendChild(lbar);
+    var ledgerStatus = el('div', 'color:#8c959f;font-size:11px', '');
+    ledgerNote(ledgerStatus);
+    lg.appendChild(ledgerStatus);
+    var taEl = el('textarea', 'display:none;width:100%;height:78px;margin-top:4px;font-size:11px;' +
+      'border:1px solid #d0d7de;border-radius:5px;padding:4px');
+    lg.appendChild(taEl);
+    lg.appendChild(el('div', 'color:#8c959f;font-size:11px;margin-top:3px',
+      '⚠️ 烟草系统同一批次只能报 1 个单位 1 个岗位，重复投递取消资格 —— ' +
+      '入库时 InternHub 会自动拦你。'));
+    body.appendChild(lg);
+
+    statusEl = el('div', 'color:#57606a;font-size:12px;margin:6px 0 6px',
       '先选「岗位方向」，再点「填入空字段」。带 * 的是你在这里改过的值。');
     body.appendChild(statusEl);
 
@@ -768,6 +894,9 @@ _TEMPLATE = r"""// ==UserScript==
     getOverrides: readOverrides, overrides: readOverrides, clearOverrides: clearOverrides,
     getDir: getDir, setDir: setDir, PACKS: PACKS, groupLabel: groupLabel,
     isVisible: isVisible, buildPanel: buildPanel,
+    // 投递台账（第 3 步重构）：本机暂存 + 导出 TSV，回 InternHub 粘贴入库
+    readLedger: readLedger, writeLedger: writeLedger, ledgerTsv: ledgerTsv,
+    guessCompany: guessCompany, LEDGER_KEY: LEDGER_KEY, STAGES: STAGES,
   };
   try { window.__IHUB_AUTOFILL__ = API; } catch (e) {}
   try { window.__LGR_AUTOFILL__ = API; } catch (e) {}

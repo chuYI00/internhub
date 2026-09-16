@@ -9,7 +9,7 @@ import re
 import pandas as pd
 import streamlit as st
 
-from ihub import config, db
+from ihub import config, db, ledger
 from ihub.linklist import apply_links_text
 
 ROOT_APP = config.PROJECT_ROOT
@@ -359,6 +359,53 @@ def main():
                 width="stretch", height=620,
             )
 
+        # ---- 📄 岗位 → 简历定制 联动（第 3 步重构）----
+        # Streamlit 的页签不能由程序切换，所以这里做成「带过去」：
+        # 点一下就把公司/岗位写进「📄 简历定制」页的输入框，切过去直接粘 JD 就行。
+        st.divider()
+        st.markdown("#### 📄 拿一条岗位去做定向简历")
+        from ihub import linkcheck as LC           # 局部导入：这块比「链接体检」区块先执行
+        _lk_rows = db.query(city=None if f_city == "全部" else None,
+                           keyword=f_keyword or None, active_only=active_only, limit=300)
+        if not _lk_rows:
+            st.caption("岗位列表为空 —— 先在侧边栏抓取或导入岗位。")
+        else:
+            _lk_opts = [f'{(r.get("company") or "（无公司名）")}｜{r.get("title") or ""}｜{r.get("city") or ""}'
+                        for r in _lk_rows]
+            _lk_pick = st.selectbox("选一条岗位（也可以直接去「📄 简历定制」页手填）",
+                                    _lk_opts, key="lk_pick")
+            _lk_i = _lk_opts.index(_lk_pick)
+            _lk_job = _lk_rows[_lk_i]
+            _lk_b1, _lk_b2 = st.columns([1, 3])
+            if _lk_b1.button("📄 定制这份简历 →", key="lk_to_tailor", type="primary"):
+                # 直接写 key（这一块在「📄 简历定制」页签之前渲染，赋值合法）
+                st.session_state["tk_co"] = str(_lk_job.get("company") or "")
+                st.session_state["tk_jt"] = str(_lk_job.get("title") or "")
+                st.session_state["tk_jd"] = str(_lk_job.get("jd_text") or _lk_job.get("description") or "")
+                st.session_state["lk_done"] = _lk_pick
+                st.rerun()
+            _done = st.session_state.pop("lk_done", None)
+            if _done:
+                st.success(f"✅ 已把「{_done}」带到「📄 简历定制」页签（公司 / 岗位已填好）——"
+                           "点上面的页签切过去，粘上 JD 就能生成定向简历和网申文案。")
+            with st.expander("这条岗位的信息（核对一下再带过去）"):
+                st.markdown(f'**公司**：{_lk_job.get("company") or "—"}　**岗位**：{_lk_job.get("title") or "—"}　'
+                            f'**城市**：{_lk_job.get("city") or "—"}')
+                _lj_off = str(_lk_job.get("official_url") or "")
+                _lj_link = str(_lk_job.get("link") or "")
+                if _lj_off and not LC.is_any_search(_lj_off):
+                    st.markdown(f"✅ **官方投递**：{_lj_off}")
+                else:
+                    st.markdown("✅ **官方投递**：—（该来源没有官方入口，去「🌏 云南秋招渠道地图」找）")
+                if _lj_link:
+                    st.caption(f"来源页（非官方，点开是采集到它的平台）：{_lj_link}")
+                _jd_prev = str(_lk_job.get("jd_text") or _lk_job.get("description") or "")
+                if _jd_prev:
+                    st.caption("JD 预览：" + _jd_prev[:300])
+                else:
+                    st.caption("这条岗位没有采集到 JD 正文 —— 到官方页面把「任职要求」整段复制，"
+                               "带回「📄 简历定制」页的 JD 框里，方向识别才准。")
+
     # ============ 🎯 投递工作台（并入 📄 简历定制）============
     with tab3:
         st.warning(AUTOBOT_NOTE)
@@ -579,6 +626,23 @@ def main():
         else:
             st.caption("✅ 没有发现重复投递。每次投完记得把这里的「进度」改成「已投」。")
 
+        # ---- ⛔ 烟草 1 单位 1 岗的强拦截（待确认的登记先存在这里）----
+        _pend = st.session_state.get("ledger_pending")
+        if _pend:
+            st.error("⛔ **这条不能直接登记 —— 会被取消资格**")
+            st.error(_pend["check"]["msg"])
+            _c1, _c2 = st.columns([1, 1])
+            if _c1.button("❌ 算了，不登记", key="pend_cancel"):
+                st.session_state.pop("ledger_pending", None)
+                st.rerun()
+            if _c2.button("我已确认要改报这一条（先把前一条改成「未通过」）", key="pend_force"):
+                db.app_add(_pend["args"]["company"], _pend["args"]["title"], _pend["args"]["city"],
+                           _pend["args"]["url"], _pend["args"]["job_type"],
+                           _pend["args"]["deadline"], _pend["args"]["note"] + "（已人工确认改报）")
+                st.session_state.pop("ledger_pending", None)
+                st.warning("已登记，但请立刻把上一条的进度改成「未通过」，并到官方系统确认前一条没有占名额。")
+                st.rerun()
+
         with st.expander("➕ 手动添加一条（官网/公众号看到的岗位）"):
             with st.form("add_app", clear_on_submit=True):
                 a1, a2, a3 = st.columns(3)
@@ -591,7 +655,18 @@ def main():
                 jt = a6.selectbox("类型", ["秋招", "实习"])
                 note0 = st.text_input("备注")
                 if st.form_submit_button("添加"):
+                    _chk0 = ledger.check_new(comp, tit, db.app_list(limit=2000))
+                    if _chk0["level"] == "block":
+                        # 烟草铁律：同批次只能 1 单位 1 岗 —— 不静默写入，弹红框让人确认
+                        st.session_state["ledger_pending"] = {
+                            "check": _chk0,
+                            "args": {"company": comp, "title": tit, "city": cty, "url": url,
+                                     "job_type": jt, "deadline": dl2, "note": note0},
+                        }
+                        st.rerun()
                     db.app_add(comp, tit, cty, url, jt, dl2, note0)
+                    if _chk0["level"] == "warn":
+                        st.warning(_chk0["msg"])
                     st.success("已添加")
                     st.rerun()
 
@@ -599,6 +674,60 @@ def main():
             ids = [r["id"] for r in db.query(apply_state=1, limit=500)]
             n = db.app_add_from_job_ids(ids) if ids else 0
             st.success(f"已加入 {n} 条（重复的自动跳过）")
+
+        # ---- 📥 网申助手 → 台账：填完/投完在页面上记一笔，复制回来粘贴入库 ----
+        with st.expander("📥 从网申助手粘贴导入（投完一家就记一笔，防「投了不知道投过」）",
+                         expanded=False):
+            st.caption("用法：在网申页面右下角「📝 网申助手」面板里点 **「📮 记录本次投递」** → "
+                       "再点 **「📋 复制待同步记录」** → 粘到下面这个框 → 点导入。\n\n"
+                       "支持网申助手复制的 TSV、Excel/飞书另存的 CSV、以及手打的一行一条"
+                       "（`公司 | 岗位 | 城市 | 状态`）。"
+                       "**烟草的记录在这里就会被拦住** —— 同一批次只能报 1 个单位 1 个岗位。")
+            _paste = st.text_area("粘贴投递记录", height=140, key="ledger_paste",
+                                  placeholder="公司\t岗位\t城市\t状态\t投递日期\t链接\t备注\n"
+                                              "云南中烟工业有限责任公司\t设备运维\t昆明\t已投\t2026-09-16\t\thttps://…")
+            _lc1, _lc2 = st.columns([1, 3])
+            if _lc1.button("📥 解析并预览", key="ledger_parse") and _paste.strip():
+                _parsed = ledger.parse_ledger_text(_paste)
+                if not _parsed:
+                    st.warning("没解析出记录 —— 检查一下是不是有「公司」这一列。")
+                else:
+                    st.session_state["ledger_plan"] = ledger.merge_plan(_parsed, db.app_list(limit=2000))
+                    st.session_state["ledger_parsed"] = _parsed
+            _plan = st.session_state.get("ledger_plan")
+            if _plan:
+                st.markdown("**预览：**" + ledger.summary_line(_plan))
+                if _plan["new"]:
+                    st.markdown("**将新增**")
+                    st.dataframe(pd.DataFrame(_plan["new"]), hide_index=True, width="stretch")
+                if _plan["update"]:
+                    st.markdown("**已存在 → 只更新状态**")
+                    st.dataframe(pd.DataFrame(
+                        [{**rec, "原状态": hit.get("stage"), "记录id": hit.get("id")}
+                         for rec, hit in _plan["update"]]), hide_index=True, width="stretch")
+                if _plan["conflict"]:
+                    st.error(f"⛔ {len(_plan['conflict'])} 条被拦截（**不会入库**）：")
+                    for _rec, _chk in _plan["conflict"]:
+                        st.error(f"「{_rec['company']}｜{_rec.get('title','')}」—— {_chk['msg']}")
+                _ok = st.checkbox("我已核对，确认导入（被拦截的不会入库）", key="ledger_ok")
+                if st.button("✅ 确认导入", key="ledger_commit", type="primary") and _ok:
+                    _n_add = _n_up = 0
+                    for _rec in _plan["new"]:
+                        db.app_add(company=_rec["company"], title=_rec.get("title", ""),
+                                   city=_rec.get("city", ""), url=_rec.get("url", ""),
+                                   job_type="秋招", deadline="", note=_rec.get("note", ""))
+                        _n_add += 1
+                    for _rec, _hit in _plan["update"]:
+                        _st = _rec.get("stage") or "已投"
+                        if _st in db.STAGES:
+                            db.app_update(int(_hit["id"]), stage=_st)
+                            _n_up += 1
+                    st.success(f"已导入：新增 {_n_add} 条，更新状态 {_n_up} 条；"
+                               f"拦截 {len(_plan['conflict'])} 条。")
+                    st.session_state.pop("ledger_plan", None)
+                    st.rerun()
+            st.caption("台账字段口径（导出的清单也按这个来）：公司 ｜ 岗位 ｜ 城市 ｜ 状态 ｜ "
+                       "投递日期 ｜ 链接 ｜ 备注。")
 
         rows_app = db.app_list(limit=800)
         if not rows_app:
@@ -878,6 +1007,8 @@ def main():
         st.markdown("#### 📝 简历定制与网申文案")
         st.caption("粘贴岗位 JD → 自动识别岗位方向 → 生成对应侧重的简历（docx / pdf）"
                    "与网申各栏文案。全部在本机完成，不联网、不上传。")
+        st.caption("💡 从「🎯 岗位」页点「📄 定制这份简历」可以**把公司和岗位直接带过来**，"
+                   "这里的输入框会自动填好 —— 你只要把 JD 粘进来。")
 
         with st.expander("🧰 配套工具下载（投递工作台 / 网申助手 / 速填卡 / 成品简历）"):
             st.caption("投递工作台：单个 HTML 文件，双击就能用（粘贴 JD 出定向简历 + 批量广投清单）。"

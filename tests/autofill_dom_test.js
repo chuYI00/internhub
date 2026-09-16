@@ -310,5 +310,46 @@ console.log('[13] 油猴沙箱模式：@grant GM_* 时用 GM 存储');
   check('GM 存储也能清空', !sandbox.__gmStore.has('ihub_profile_overrides_v1'));
 }
 
+/* ---------- 14. 投递台账（第 3 步重构：填完当场记一笔，回 InternHub 粘贴入库） ---------- */
+console.log('[14] 📮 投递台账：本机暂存 + 导出 TSV');
+{
+  const src = fs.readFileSync(NAME, 'utf8');
+  check('脚本里有台账存储键', /ihub_ledger_v1/.test(src));
+  check('面板有「记录本次投递」按钮', /记录本次投递/.test(src));
+  check('面板有「复制待同步记录」按钮', /复制待同步记录/.test(src));
+  check('面板提示了烟草「1 单位 1 岗」铁律', /同一批次只能报 1 个单位 1 个岗位/.test(src));
+
+  const root = new El('body');
+  root.appendChild(fieldRow('姓名', input({})));
+  const sandbox = buildSandbox(root);
+  vm.runInContext(code, vm.createContext(sandbox), { filename: NAME });
+  const api = sandbox.window.__IHUB_AUTOFILL__;
+
+  check('暴露了台账 API', typeof api.readLedger === 'function' &&
+    typeof api.writeLedger === 'function' && typeof api.ledgerTsv === 'function');
+
+  api.writeLedger([{ company: '云南中烟工业有限责任公司', title: '设备运维', city: '昆明',
+    stage: '已投', applied_at: '2026-09-16', url: 'https://x/apply', note: '网申助手记录' }]);
+  const back = api.readLedger();
+  check('写进去能读出来', back.length === 1 && back[0].company === '云南中烟工业有限责任公司', back);
+  check('状态只允许台账那几种', Array.isArray(api.STAGES) && api.STAGES.includes('已投'), api.STAGES);
+
+  const tsv = api.ledgerTsv(back);
+  const lines = tsv.split('\n');
+  check('导出的 TSV 有表头（公司/岗位/城市/状态…）',
+    lines[0] === '公司\t岗位\t城市\t状态\t投递日期\t链接\t备注', lines[0]);
+  check('导出的数据行字段数对齐', lines[1].split('\t').length === 7, lines[1]);
+  check('导出内容含公司名', lines[1].includes('云南中烟工业有限责任公司'));
+
+  // 面板能构建出来，并且里面真有那个按钮
+  try {
+    api.buildPanel();
+    const texts = root.descendants.map(d => d.textContent || '').join('|');
+    check('buildPanel 不报错且含投递登记入口', texts.includes('投递登记'), texts.slice(0, 120));
+  } catch (e) {
+    check('buildPanel 不报错且含投递登记入口', false, e.message);
+  }
+}
+
 console.log('\n结果: ' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);

@@ -136,6 +136,38 @@ def main() -> int:
         jt[0].set_value("秋招").run()
     check("秋招筛选无异常", not at3.exception, [e.value for e in at3.exception])
 
+    print("[6] 第 3 步重构：台账打通 + 岗位↔简历定制联动")
+    _keys_all = [b.key for b in at.button]
+    check("有『📄 定制这份简历 →』按钮（岗位页 → 简历定制）",
+          "lk_to_tailor" in _keys_all, _keys_all[-12:])
+    check("有岗位选择框（选一条带过去）",
+          "lk_pick" in [s.key for s in at.selectbox], [s.key for s in at.selectbox][:12])
+    _ta = [t.key for t in at.text_area]
+    check("有『粘贴投递记录』输入框（网申助手 → 台账）", "ledger_paste" in _ta, _ta)
+    check("有『解析并预览』按钮", "ledger_parse" in _keys_all, _keys_all[-12:])
+
+    # 页面文字散落在 markdown / caption / expander / info 等多种元素里，全捞一遍再断言
+    _blob_parts = []
+    for _t in ("markdown", "caption", "expander", "info", "warning", "error",
+               "success", "text", "code", "header", "subheader"):
+        try:
+            for _e in at.get(_t):
+                _blob_parts.append(str(getattr(_e, "value", None) or getattr(_e, "label", "") or ""))
+        except Exception:
+            pass
+    _blob = "\n".join(_blob_parts)
+    check("有『从网申助手粘贴导入』折叠区", "从网申助手粘贴导入" in _blob,
+          [p[:40] for p in _blob_parts if "网申助手" in p][:3])
+    check("烟草「1 单位 1 岗」铁律在台账页有提示",
+          "同一批次只能报 1 个单位 1 个岗位" in _blob, None)
+    check("台账页说明了烟草记录会被拦截", "烟草的记录在这里就会被拦住" in _blob, None)
+
+    print("[7] 第 2 步：链接体检区块")
+    check("有『链接体检』区块", "链接体检" in _blob, None)
+    check("页面明示「伪直达」口径", "伪直达" in _blob, None)
+    check("页面说明了 A 级才能当官方投递按钮",
+          "只有 A 级" in _blob or "A 级" in _blob, None)
+
     # 清理临时库
     for p in (tmp_db, tmp_db + "-wal", tmp_db + "-shm"):
         try:

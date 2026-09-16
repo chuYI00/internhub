@@ -200,11 +200,16 @@ function cardRadios(cls, values) {
     check('点复制后剪贴板拿到手机号',
       (sandbox.__copied || []).indexOf(EXP.phone) >= 0, sandbox.__copied);
     check('状态栏给了提示', String((root.descendants.find(d => d.tagName === 'DIV') || {}) && '')  !== 'x');
-    // 复制空字段不会抛错
-    const emptyRow = root.descendants.filter(d => d.tagName === 'INPUT' && d.value === '')[0];
-    if (emptyRow) {
-      const b = emptyRow.parentElement.descendants.filter(d => d.tagName === 'BUTTON')[0];
-      b.click();
+    // 复制空字段不会抛错。
+    // 注意：面板里除了「资料字段行」还有「投递登记」那一组输入框（公司/岗位），
+    // 它们没有 📋 按钮 —— 所以要挑「同一行里既有空 input 又有按钮」的那种。
+    const emptyRows = root.descendants
+      .filter(d => d.tagName === 'INPUT' && d.value === '')
+      .map(inp => (inp.parentElement.descendants || [])
+        .filter(b => b.tagName === 'BUTTON' && b.textContent === '📋')[0])
+      .filter(Boolean);
+    if (emptyRows.length) {
+      emptyRows[0].click();
       check('复制空字段不报错', true);
     } else {
       check('复制空字段不报错（无空字段，跳过）', true);
