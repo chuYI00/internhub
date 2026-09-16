@@ -62,6 +62,76 @@ for kw in ("应届生求职网·2027校招公告", "云南省教育厅·公示�
 check("应届生源开了 auto_company", any(s.get("auto_company") for s in srcs))
 check("每个源都有 name", all(s.get("name") for s in srcs))
 
+print("[3b] 采集健壮性：重试 / TLS 开关 / 慢站超时 / 事后公告过滤")
+from ihub.crawlers import weblist as W                                # noqa: E402
+
+# ① 失败一次后能重试成功（政府站高峰期常见 5xx / 连接重置）
+_calls = {"n": 0}
+_real_get = W.requests.get
+
+
+class _FakeResp:
+    status_code = 200
+    text = "<html><body><a href='/a.html'>某某单位2027年公开招聘公告</a></body></html>"
+    url = "https://example.com/"
+    apparent_encoding = "utf-8"
+    encoding = "utf-8"
+
+
+def _flaky_get(url, **kw):
+    _calls["n"] += 1
+    if _calls["n"] == 1:
+        raise RuntimeError("模拟首次连接被重置")
+    return _FakeResp()
+
+
+W.requests.get = _flaky_get
+try:
+    r = W._http_get("https://example.com/list.html")
+    check("首次失败后自动重试并成功", _calls["n"] == 2 and r.status_code == 200, _calls["n"])
+finally:
+    W.requests.get = _real_get
+
+# ② insecure_tls 真的会把证书校验关掉（老旧证书链的州/市级政府站）
+_seen = {}
+
+
+def _capture_get(url, **kw):
+    _seen.update(kw)
+    return _FakeResp()
+
+
+W.requests.get = _capture_get
+try:
+    W._http_get("https://example.com/", insecure=True)
+    check("insecure_tls=True → verify=False", _seen.get("verify") is False, _seen.get("verify"))
+    _seen.clear()
+    W._http_get("https://example.com/", insecure=False)
+    check("默认仍然校验证书（verify=True）", _seen.get("verify") is True, _seen.get("verify"))
+    check("请求头带 Accept-Language: zh-CN（部分站点按语言返回空壳页）",
+          "zh-CN" in str((_seen.get("headers") or {}).get("Accept-Language")), _seen.get("headers"))
+finally:
+    W.requests.get = _real_get
+
+check("默认单源超时 >= 20 秒（省级政府站首包常 >10s）", W.PER_SOURCE_TIMEOUT >= 20,
+      W.PER_SOURCE_TIMEOUT)
+
+# ③ 云南核心源必须是"栏目页"而不是首页，且事后公告有过滤
+_srcs = {x["name"]: x for x in load_sources()}
+_yn = _srcs.get("云南省人社厅·招聘公告")
+check("云南省人社厅指向「招考招聘」栏目(ClassID=458)，不是首页",
+      _yn and "ClassID=458" in _yn["url"], _yn and _yn["url"])
+check("云南省人社厅带事后公告过滤（拟聘/公示/体检…）",
+      _yn and "拟聘" in (_yn.get("exclude_keyword_regex") or ""), _yn and _yn.get("exclude_keyword_regex"))
+_km = _srcs.get("昆明市人社局·通知公告")
+check("昆明市人社局指向 /tzgg/ 栏目页", _km and _km["url"].endswith("/tzgg/"), _km and _km["url"])
+check("昆明人社的链接正则匹配**相对**路径（列表页里是 /c/日期/id.shtml）",
+      _km and not _km["link_regex"].startswith("http") and _km["link_regex"].startswith("c/"),
+      _km and _km["link_regex"])
+check("证书老旧的站点开了 insecure_tls",
+      _srcs.get("大理州人社局·通知公告", {}).get("insecure_tls") is True
+      and _srcs.get("云南农业大学就业网", {}).get("insecure_tls") is True)
+
 print("[4] 官网入口匹配（必须取最长键，别把「红塔银行」配成「红塔集团」）")
 check("云南中烟 → 中烟官网", channels.official_for("云南中烟工业有限责任公司") == "https://www.ynzy-tobacco.com/")
 check("云南机场 → 航产投招聘页", channels.official_for("云南航空产业投资集团（云南机场集团）") == "https://hr.ynairport.com/zp/")

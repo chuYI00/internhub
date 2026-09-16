@@ -24,7 +24,8 @@
     "batch": "2027届",
     "tags": "高校就业网;昆明",
     "note": "昆明理工大学就业网（昆明本地岗位/宣讲）",
-    "enabled": true
+    "enabled": true,
+    "exclude_keyword_regex": "生源信息|双选会预告|就业质量"
   },
   {
     "name": "天津大学就业信息网",
@@ -121,16 +122,19 @@
   },
   {
     "name": "云南省人社厅·招聘公告",
-    "url": "https://hrss.yn.gov.cn/NewsLsit.aspx?ClassID=558",
+    "url": "https://hrss.yn.gov.cn/NewsLsit.aspx?ClassID=458",
     "link_regex": "NewsView\\.aspx\\?NewsID=",
-    "keyword_regex": "招聘|选调|人才|事业单位|国企|招录|引进",
+    "keyword_regex": "招聘|招考|选调|事业单位|校园|公开|人才引进|定向",
     "base": "https://hrss.yn.gov.cn",
     "city": "昆明",
     "job_type": "秋招",
     "batch": "2027届",
     "tags": "云南;官方公告",
-    "note": "云南省人社厅通知公告（事业单位/国企/人才引进）",
-    "enabled": true
+    "note": "云南省人社厅「招考招聘」栏目（ClassID=458）—— 省属事业单位、省属国企、定向选调的公告都从这儿发；已排掉「拟聘用人员公示」这类事后公告",
+    "enabled": true,
+    "exclude_keyword_regex": "拟聘|拟录用|聘用人员公示|体检|成绩|考察",
+    "min_title_len": 10,
+    "timeout": 30
   },
   {
     "name": "大理州政府·招聘公告",
@@ -143,7 +147,10 @@
     "batch": "2027届",
     "tags": "大理;官方公告",
     "note": "大理州政府公开公告（招聘/人才类）",
-    "enabled": true
+    "enabled": true,
+    "exclude_keyword_regex": "拟聘|拟录用|公示|补贴",
+    "min_title_len": 10,
+    "timeout": 30
   },
   {
     "name": "潍坊市人社局·招聘公告",
@@ -213,16 +220,19 @@
   },
   {
     "name": "昆明市人社局·通知公告",
-    "url": "https://rsj.km.gov.cn/",
+    "url": "https://rsj.km.gov.cn/tzgg/",
     "base": "https://rsj.km.gov.cn",
-    "link_regex": "detail|job|zpxx|zpinfo|campus|recruit|news|content|notice|gonggao|tzgg|rsxx|art",
-    "keyword_regex": "招聘|校招|秋招|宣讲|选调|岗位|人才|双选|录用|公告|公开",
+    "link_regex": "c/\\d{4}-\\d{2}-\\d{2}/\\d+\\.shtml",
+    "keyword_regex": "招聘|招考|事业单位|选调|公开|人才|就业|引进|国企|州市",
     "city": "昆明",
     "job_type": "秋招",
     "batch": "2027届",
     "tags": "云南;昆明;官方公告",
-    "note": "昆明市人社局（本地招聘公告、事业单位、国企招聘）",
-    "enabled": true
+    "note": "昆明市人社局「通知公告」（/tzgg/）—— 昆明市属事业单位、国企、州市招聘",
+    "enabled": true,
+    "exclude_keyword_regex": "仲裁|补贴|拟聘|拟录用|失业|社保|公示",
+    "min_title_len": 10,
+    "timeout": 30
   },
   {
     "name": "大理州人社局·通知公告",
@@ -234,8 +244,12 @@
     "job_type": "秋招",
     "batch": "2027届",
     "tags": "云南;大理;官方公告",
-    "note": "大理州人社局（本地招聘公告）",
-    "enabled": true
+    "note": "大理州人社局通知公告（大理本地招聘）。**此站在部分网络环境会 TLS 握手失败**，抓不到就双击 抓取数据.bat 重试，或直接去「🌏 云南秋招」页签用搜索直达看",
+    "enabled": true,
+    "exclude_keyword_regex": "仲裁|补贴|拟聘|拟录用|失业|社保|公示",
+    "min_title_len": 10,
+    "timeout": 30,
+    "insecure_tls": true
   },
   {
     "name": "云南省国资委·招聘与人事",
@@ -248,7 +262,11 @@
     "batch": "2027届",
     "tags": "云南;省属国企;官方公告",
     "note": "云南省国资委（省属国企招聘公告集中转发）",
-    "enabled": true
+    "enabled": true,
+    "exclude_keyword_regex": "拟聘|拟录用|公示|任免|考察|招标",
+    "min_title_len": 10,
+    "timeout": 30,
+    "insecure_tls": true
   },
   {
     "name": "云南师范大学就业信息网",
@@ -261,7 +279,9 @@
     "batch": "2027届",
     "tags": "高校就业网;云南;昆明",
     "note": "云南师范大学就业信息网（昆明本地宣讲/岗位）",
-    "enabled": true
+    "enabled": true,
+    "exclude_keyword_regex": "生源信息|双选会预告|就业质量",
+    "timeout": 30
   },
   {
     "name": "云南农业大学就业网",
@@ -274,7 +294,9 @@
     "batch": "2027届",
     "tags": "高校就业网;云南;昆明",
     "note": "云南农业大学就业网",
-    "enabled": true
+    "enabled": true,
+    "timeout": 30,
+    "insecure_tls": true
   },
   {
     "name": "云南中烟工业·招聘专栏",
@@ -342,7 +364,10 @@
     "batch": "2027届",
     "tags": "云南;官方公告;事业单位",
     "note": "云南省教育厅公示公告（省属高校、厅直属单位招聘）",
-    "enabled": true
+    "enabled": true,
+    "exclude_keyword_regex": "拟聘|拟录用|公示|评审|通过名单|认定",
+    "min_title_len": 10,
+    "timeout": 30
   },
   {
     "name": "云南人才网·本地职位",

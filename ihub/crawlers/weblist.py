@@ -9,6 +9,9 @@
   "job_type": "秋招",                  # 实习/秋招
   "city": "昆明",                      # 归属城市（站点本身不区分时用）
   "keyword_regex": "招聘|选调|事业单位|国企|校园", # 标题需命中（可空）
+  "exclude_keyword_regex": "拟聘|公示|成绩",           # 标题命中则该条丢弃（去掉"事后公告"）
+  "timeout": 30,                                   # 单源超时覆盖（慢站可放宽）
+  "insecure_tls": true,                            # 证书链老旧的政府站按需打开
   "base": "https://hrss.yn.gov.cn",     # 相对链接补全前缀（可空=自动）
   "enabled": true
 }
@@ -29,7 +32,9 @@ from .base import BaseCrawler
 SOURCES_PATH = os.path.join(config.PROJECT_ROOT, "sources.json")      # 优先：随 Git 版本管理
 SOURCES_FALLBACK = os.path.join(config.DATA_DIR, "sources.json")      # 兼容旧位置
 
-PER_SOURCE_TIMEOUT = 10      # 单源超时（秒）
+PER_SOURCE_TIMEOUT = 20      # 单源超时（秒）。省级政府站首包常 >10s，10s 会整源判失败
+HTTP_RETRY = 2               # 失败重试次数（政府站高峰期偶发 5xx / 连接重置）
+HTTP_BACKOFF = 1.2           # 重试间隔（秒），递增
 PER_SOURCE_MAX_ITEMS = 60    # 单源最多取多少条
 MAX_WORKERS = 6              # 并发抓取源数量
 
@@ -72,6 +77,33 @@ def _company_from_title(title: str) -> str:
     t = _COMPANY_CUT.split(_clean_title(title))[0]
     t = _COMPANY_TAIL.sub("", t).strip()
     return t if 2 <= len(t) <= 24 else ""
+
+
+def _http_get(url: str, timeout: float = PER_SOURCE_TIMEOUT, insecure: bool = False):
+    """带重试的 GET。
+
+    - insecure=True：**不校验 TLS 证书**。部分州/市级政府站用的是老旧证书链，
+      requests 默认会直接 SSLError（表现：整源抓不到）。这些站只读公开公告，
+      放宽校验可以接受；默认关闭，只在单个源上按需打开（`insecure_tls`）。
+    - 带 Accept-Language: zh-CN —— 少数站点按语言返回不同页面，缺这个头会拿到空壳页。
+    """
+    headers = {
+        "User-Agent": config.USER_AGENT,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+    }
+    last = None
+    for attempt in range(HTTP_RETRY + 1):
+        try:
+            r = requests.get(url, headers=headers, timeout=(6, timeout),
+                             verify=not insecure, allow_redirects=True)
+            r.encoding = r.apparent_encoding or "utf-8"
+            return r
+        except Exception as e:                      # noqa: BLE001 —— 网络异常种类多，统一重试
+            last = e
+            if attempt < HTTP_RETRY:
+                time.sleep(HTTP_BACKOFF * (attempt + 1))
+    raise last
 
 
 def load_sources():
@@ -184,9 +216,9 @@ class WebListCrawler(BaseCrawler):
 
     def _fetch_one(self, s):
         url = s["url"]
-        r = requests.get(url, headers={"User-Agent": config.USER_AGENT},
-                         timeout=(6, PER_SOURCE_TIMEOUT))
-        r.encoding = r.apparent_encoding or "utf-8"
+        r = _http_get(url,
+                      timeout=float(s.get("timeout") or PER_SOURCE_TIMEOUT),
+                      insecure=bool(s.get("insecure_tls")))
         html = r.text[:400_000]
         items = self._parse(html, s, url)
         cap = int(s.get("max_items") or PER_SOURCE_MAX_ITEMS)
