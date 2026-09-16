@@ -68,5 +68,25 @@ check("南方电网云南 → 电网招聘系统", channels.official_for("中国
 check("不认识的空公司名返回空", channels.official_for("某某科技") == "")
 check("空公司名不炸", channels.official_for("") == "")
 
+print("[5] 投递入口清单（官方入口 / 来源页要分清）")
+from ihub.linklist import apply_links_text                     # noqa: E402
+_recs = [
+    # 应届生：link 是跳转壳，official_url 才是企业网申页 → 应显示为"官方投递"
+    {"title": "中国建设银行2027年度校园招聘", "company": "中国建设银行", "city": "", "source": "应届生",
+     "link": "https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fjob2.ccb.com%2F",
+     "official_url": "https://job2.ccb.com/cn/job/plan_index.html?planType=XY",
+     "deadline": "2026-10-15"},
+    {"title": "某校招聘专员", "company": "某单位", "city": "昆明", "source": "云师大就业网",
+     "link": "https://job.ynnu.edu.cn/info/1.html",
+     "official_url": "https://job.ynnu.edu.cn/info/1.html", "deadline": ""},
+]
+_txt = apply_links_text(_recs)
+check("清单含岗位标题", "中国建设银行2027年度校园招聘" in _txt)
+check("有官方入口的写成 官方投递：", "官方投递：https://job2.ccb.com" in _txt)
+check("official==link 的不冒充官方入口",
+      "官方投递：—" in _txt and _txt.count("官方投递：https") == 1, _txt.count("官方投递：https"))
+check("统计了缺失条数", "1 条没有官方入口" in _txt)
+check("空输入不炸", apply_links_text([]).startswith("投递入口清单"))
+
 print(f"\n结果: {P} 通过, {F} 失败")
 sys.exit(1 if F else 0)

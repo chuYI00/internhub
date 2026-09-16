@@ -42,7 +42,7 @@ DATE_RE = re.compile(r"(20\d{2}[-/年.]\d{1,2}[-/月.]\d{1,2})")
 _COMPANY_CUT = re.compile(
     r"(20\d{2}\s*(届|年|年度|秋|春)?|校园招聘|校招|秋季招聘|秋招|春季招聘|春招|社会招聘|"
     r"管培生|实习生|招聘|招募|启动|开启|火热|进行中|计划|公告)")
-_COMPANY_TAIL = re.compile(r"[的·\-—_:：、\s]+$")
+_COMPANY_TAIL = re.compile(r"[的·\-—_:：、,，。;；!！?？\s]+$")
 
 
 def _real_apply_url(href: str) -> str:

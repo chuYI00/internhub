@@ -1,0 +1,367 @@
+投递入口清单（先进官方页面 → 再用网申助手填表 → 再上传对应简历）
+==============================================================
+
+用法：① 点下面的官方入口进企业网申系统  ② 页面上点右下角「📝 网申助手」自动填
+      ③ 回本工具「🎯 投递工作台」生成这份岗位的定向简历并上传  ④ 标记已投防重复
+
+[1] 老乡鸡，校园招聘
+    公司：老乡鸡　城市：　截止：见公告
+    官方投递：https://lxjchina1.zhiye.com/campus
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Flxjchina1.zhiye.com%2Fcampus
+    来源：应届生求职网·2027校招公告
+
+[2] 工银安盛校园招聘
+    公司：工银安盛　城市：　截止：见公告
+    官方投递：https://job.icbc.com.cn/pc/index.html
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fjob.icbc.com.cn%2Fpc%2Findex.html%23%2Fmain%2Fschool%2FannounDetail%2F00000000000010659017
+    来源：应届生求职网·2027校招公告
+
+[3] 太古地产校园招聘
+    公司：太古地产　城市：　截止：见公告
+    官方投递：https://www.swireproperties-recruitment.com/campus-recruitment/swireproperties/126012?sourceToken=5897da0a8ce5fceafea74a416d047052
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fwww.swireproperties-recruitment.com%2Fcampus-recruitment%2Fswireproperties%2F126012%3FsourceToken%3D5897da0a8ce5fceafea74a416d047052%23%2Fpage%2F%25E6%25A0%25A1%25E5%259B%25AD%25E6%258B%259B%25E8%2581%2598
+    来源：应届生求职网·2027校招公告
+
+[4] 卫星化学校园招聘
+    公司：卫星化学　城市：　截止：见公告
+    官方投递：https://satlpec.zhiye.com/
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fsatlpec.zhiye.com%2F
+    来源：应届生求职网·2027校招公告
+
+[5] 上海家化2027秋招
+    公司：上海家化　城市：上海　截止：见公告
+    官方投递：https://mp.weixin.qq.com/s/6ZROI2D78toXWUgzxRVdvg
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fmp.weixin.qq.com%2Fs%2F6ZROI2D78toXWUgzxRVdvg
+    来源：应届生求职网·2027校招公告
+
+[6] 康尼机电2027校招
+    公司：康尼机电　城市：　截止：见公告
+    官方投递：https://kangni.zhiye.com/campus
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fkangni.zhiye.com%2Fcampus
+    来源：应届生求职网·2027校招公告
+
+[7] 光宝科技秋招启动
+    公司：光宝科技　城市：　截止：见公告
+    官方投递：https://liteon.zhiye.com/campus/jobs
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fliteon.zhiye.com%2Fcampus%2Fjobs
+    来源：应届生求职网·2027校招公告
+
+[8] 申万宏源秋招招聘中
+    公司：申万宏源　城市：　截止：见公告
+    官方投递：https://app.mokahr.com/campus-recruitment/swhysc-job/166086
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fapp.mokahr.com%2Fcampus-recruitment%2Fswhysc-job%2F166086%23%2F
+    来源：应届生求职网·2027校招公告
+
+[9] 中外运2027届校招
+    公司：中外运　城市：　截止：见公告
+    官方投递：http://sinotrans.zhiye.com
+    原链接：https://q.yingjiesheng.com/thirdlink?url=http%3A%2F%2Fsinotrans.zhiye.com
+    来源：应届生求职网·2027校招公告
+
+[10] 华润置地校园招聘
+    公司：华润置地　城市：　截止：见公告
+    官方投递：https://app.mokahr.com/m/campus-recruitment/crland/168540?locale=zh-CN
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fapp.mokahr.com%2Fm%2Fcampus-recruitment%2Fcrland%2F168540%3Flocale%3Dzh-CN
+    来源：应届生求职网·2027校招公告
+
+[11] 三棵树2027校招
+    公司：三棵树　城市：　截止：见公告
+    官方投递：https://3treesgroup.zhaopin.com/
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2F3treesgroup.zhaopin.com%2F
+    来源：应届生求职网·2027校招公告
+
+[12] 景旺电子27届校招
+    公司：景旺电子27届　城市：　截止：见公告
+    官方投递：https://app.mokahr.com/campus-recruitment/jingwang/170520?locale=zh-CN
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fapp.mokahr.com%2Fcampus-recruitment%2Fjingwang%2F170520%3Flocale%3Dzh-CN%23%2F
+    来源：应届生求职网·2027校招公告
+
+[13] 上实集团校园招聘
+    公司：上实集团　城市：　截止：见公告
+    官方投递：https://siic.zhiye.com/campus
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fsiic.zhiye.com%2Fcampus
+    来源：应届生求职网·2027校招公告
+
+[14] 立信2027校园招聘
+    公司：立信　城市：　截止：见公告
+    官方投递：https://bdochina.zhiye.com/campus
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fbdochina.zhiye.com%2Fcampus
+    来源：应届生求职网·2027校招公告
+
+[15] 平安金服2027届校园招聘
+    公司：平安金服　城市：　截止：见公告
+    官方投递：https://campus.pingan.com/pajf/position
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fcampus.pingan.com%2Fpajf%2Fposition
+    来源：应届生求职网·2027校招公告
+
+[16] 中国太平保险集团2027秋季校招
+    公司：中国太平保险集团　城市：　截止：见公告
+    官方投递：https://cntp.zhiye.com/campus
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fcntp.zhiye.com%2Fcampus
+    来源：应届生求职网·2027校招公告
+
+[17] 工银投资2027年度校园招聘
+    公司：工银投资　城市：　截止：见公告
+    官方投递：https://job.icbc.com.cn/pc/index.html
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fjob.icbc.com.cn%2Fpc%2Findex.html%23%2Fmain%2Fschool%2Fhome%2Fpost
+    来源：应届生求职网·2027校招公告
+
+[18] 未岚大陆2027校园招聘
+    公司：未岚大陆　城市：　截止：见公告
+    官方投递：https://app.mokahr.com/campus-recruitment/weilandalu
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fapp.mokahr.com%2Fcampus-recruitment%2Fweilandalu
+    来源：应届生求职网·2027校招公告
+
+[19] 北电数智2027届校园招聘
+    公司：北电数智　城市：　截止：见公告
+    官方投递：https://caz6yhvgk5z.jobs.feishu.cn/bedi
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fcaz6yhvgk5z.jobs.feishu.cn%2Fbedi
+    来源：应届生求职网·2027校招公告
+
+[20] 工行业务研发中心2027校园招聘
+    公司：工行业务研发中心　城市：　截止：见公告
+    官方投递：https://job.icbc.com.cn/pc/index.html
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fjob.icbc.com.cn%2Fpc%2Findex.html%23%2Fmain%2Fschool%2FannounDetail%2F00000000000010659015
+    来源：应届生求职网·2027校招公告
+
+[21] 招商银行广州分行2027届校园招聘
+    公司：招商银行广州分行　城市：广州　截止：见公告
+    官方投递：https://cmbt.cn/x5p
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fcmbt.cn%2Fx5p
+    来源：应届生求职网·2027校招公告
+
+[22] 农行北京分行2027年度校园招聘
+    公司：农行北京分行　城市：北京　截止：见公告
+    官方投递：https://career.abchina.com/build/index.html
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fcareer.abchina.com%2Fbuild%2Findex.html%23%2FRecruitmentOrgDetails%2F99%2F217
+    来源：应届生求职网·2027校招公告
+
+[23] 欧莱雅中国管培生项目火热招聘中
+    公司：欧莱雅中国　城市：　截止：见公告
+    官方投递：https://mp.weixin.qq.com/s/kD0avNpwcd5ZIRBKaPLQ1g
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fmp.weixin.qq.com%2Fs%2FkD0avNpwcd5ZIRBKaPLQ1g
+    来源：应届生求职网·2027校招公告
+
+[24] 中国平安2027届校园招聘
+    公司：中国平安　城市：　截止：见公告
+    官方投递：https://campus.pingan.com/
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fcampus.pingan.com%2F
+    来源：应届生求职网·2027校招公告
+
+[25] 建行广东省分行27年度校园招聘
+    公司：建行广东省分行27年度　城市：　截止：见公告
+    官方投递：https://job3.ccb.com/cn/job/org_index.html?planType=XY
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fjob3.ccb.com%2Fcn%2Fjob%2Forg_index.html%3FplanType%3DXY%26orgId%3D1000001
+    来源：应届生求职网·2027校招公告
+
+[26] 中国建设银行2027年度校园招聘
+    公司：中国建设银行　城市：　截止：见公告
+    官方投递：https://job2.ccb.com/cn/job/plan_index.html?planType=XY
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fjob2.ccb.com%2Fcn%2Fjob%2Fplan_index.html%3FplanType%3DXY
+    来源：应届生求职网·2027校招公告
+
+[27] 中际旭创全球校园招聘
+    公司：中际旭创全球　城市：　截止：见公告
+    官方投递：https://zj-innolight.jobs.feishu.cn/300308
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fzj-innolight.jobs.feishu.cn%2F300308
+    来源：应届生求职网·2027校招公告
+
+[28] 农行浙江省分行2027年度校园招聘
+    公司：农行浙江省分行　城市：　截止：见公告
+    官方投递：https://career.abchina.com/build/index.html
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fcareer.abchina.com%2Fbuild%2Findex.html%23%2FRecruitmentOrgDetails%2F99%2F239
+    来源：应届生求职网·2027校招公告
+
+[29] 中国中信金融资产2027年校招
+    公司：中国中信金融资产　城市：　截止：见公告
+    官方投递：https://mp.weixin.qq.com/s/kgeEcxdqGOCNBz7SDRQ-VQ
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fmp.weixin.qq.com%2Fs%2FkgeEcxdqGOCNBz7SDRQ-VQ
+    来源：应届生求职网·2027校招公告
+
+[30] 中集集团2027届校招
+    公司：中集集团　城市：　截止：见公告
+    官方投递：https://www.cimc.com/
+    原链接：https://campus.51job.com/cimc/
+    来源：应届生求职网·2027校招公告
+
+[31] 第一创业证券2027届校园招聘
+    公司：第一创业证券　城市：　截止：见公告
+    官方投递：https://wecruit.hotjob.cn/SU62061b902f9d245151c61b30/mc/position/campus
+    原链接：https://q.yingjiesheng.com/thirdlink?url=https%3A%2F%2Fwecruit.hotjob.cn%2FSU62061b902f9d245151c61b30%2Fmc%2Fposition%2Fcampus
+    来源：应届生求职网·2027校招公告
+
+[32] 2027年度联合校园招聘（山东/云南分公司）
+    公司：中国邮政　城市：潍坊　截止：见公告
+    官方投递：https://career.psbc.com/
+    原链接：https://www.iguopin.com/
+    来源：秋招调研
+
+[33] 2027届秋季校园招聘（云南各分行）
+    公司：中国农业银行云南省分行　城市：昆明　截止：见公告
+    官方投递：https://career.abchina.com/
+    原链接：http://m.yinhangzhaopin.com/tag/yunnan_509_1.html
+    来源：秋招调研
+
+[34] 2027届秋季校园招聘（云南各分行）
+    公司：中国建设银行云南省分行　城市：昆明　截止：见公告
+    官方投递：https://job2.ccb.com/cn/job/index.html
+    原链接：http://m.yinhangzhaopin.com/tag/yunnan_509_1.html
+    来源：秋招调研
+
+[35] 校园招聘（技术/市场/综合）
+    公司：中国移动（云南公司）　城市：昆明　截止：见公告
+    官方投递：https://job.10086.cn/
+    原链接：https://job.10086.cn/personal/campus/
+    来源：秋招调研
+
+[36] 信息科技类/金融综合类
+    公司：中国银行（含云南省分行）　城市：昆明　截止：见公告
+    官方投递：https://campus.chinahr.com/pages/boc/
+    原链接：https://www.boc.cn/aboutboc/bi4/202609/t20260903_25689311.html
+    来源：秋招调研
+
+[37] 届乐道顾问储备实习（昆明）()
+    公司：NIO蔚来　城市：昆明　截止：见公告
+    官方投递：https://nio.jobs.feishu.cn/campus/
+    原链接：https://www.shixiseng.com/intern/inn_wvskxjlnkcw4
+    来源：实习僧
+
+[38] 校实习-蔚来顾问-昆明()
+    公司：NIO蔚来　城市：昆明　截止：见公告
+    官方投递：https://nio.jobs.feishu.cn/campus/
+    原链接：https://www.shixiseng.com/intern/inn_nf7bqcb5hyck
+    来源：实习僧
+
+[39] 校实习-乐道顾问-昆明()
+    公司：NIO蔚来　城市：昆明　截止：见公告
+    官方投递：https://nio.jobs.feishu.cn/campus/
+    原链接：https://www.shixiseng.com/intern/inn_rhoqm4tpq6nc
+    来源：实习僧
+
+[40] 校实习-蔚来顾问-大理()
+    公司：NIO蔚来　城市：大理　截止：见公告
+    官方投递：https://nio.jobs.feishu.cn/campus/
+    原链接：https://www.shixiseng.com/intern/inn_5yjlzddgybpj
+    来源：实习僧
+
+[41] 校实习-乐道顾问-大理()
+    公司：NIO蔚来　城市：大理　截止：见公告
+    官方投递：https://nio.jobs.feishu.cn/campus/
+    原链接：https://www.shixiseng.com/intern/inn_69jg9klj2hhi
+    来源：实习僧
+
+[42] 12-08]【选调生】云南省面向选定高校招录2022年定向选调生笔试公告
+    公司：云南师范大学就业信息网　城市：昆明　截止：见公告
+    官方投递：—（该来源未提供官方入口，请按下面的原链接进）
+    原链接：https://ynnu.jysd.com/news/view/aid/301704/tag/zxzp
+    来源：云南师范大学就业信息网
+
+[43] 04-10]【选调生】云南省2022年定向选调生拟录用人员公示
+    公司：云南师范大学就业信息网　城市：昆明　截止：见公告
+    官方投递：—（该来源未提供官方入口，请按下面的原链接进）
+    原链接：https://ynnu.jysd.com/news/view/aid/305551/tag/zxzp
+    来源：云南师范大学就业信息网
+
+[44] 02-29]【公务员】云南省2024年度考试录用公务员公告
+    公司：云南师范大学就业信息网　城市：昆明　截止：见公告
+    官方投递：—（该来源未提供官方入口，请按下面的原链接进）
+    原链接：https://ynnu.jysd.com/news/view/aid/328127/tag/zxzp
+    来源：云南师范大学就业信息网
+
+[45] 02-29]【事业单位】昆明市2024年事业单位公开招聘工作人员公告
+    公司：云南师范大学就业信息网　城市：昆明　截止：见公告
+    官方投递：—（该来源未提供官方入口，请按下面的原链接进）
+    原链接：https://ynnu.jysd.com/news/view/aid/328140/tag/zxzp
+    来源：云南师范大学就业信息网
+
+[46] 03-01]【事业单位】2024年云南事业单位招聘汇总
+    公司：云南师范大学就业信息网　城市：昆明　截止：见公告
+    官方投递：—（该来源未提供官方入口，请按下面的原链接进）
+    原链接：https://ynnu.jysd.com/news/view/aid/328169/tag/zxzp
+    来源：云南师范大学就业信息网
+
+[47] 10-17]中央机关及其直属机构2025年度考试录用公务员公告
+    公司：云南师范大学就业信息网　城市：昆明　截止：见公告
+    官方投递：—（该来源未提供官方入口，请按下面的原链接进）
+    原链接：https://ynnu.jysd.com/news/view/aid/333152/tag/zxzp
+    来源：云南师范大学就业信息网
+
+[48] 12-26]云南省2026年上半年事业单位公开招聘分类考试公共科目笔试相关工作安排
+    公司：云南师范大学就业信息网　城市：昆明　截止：见公告
+    官方投递：—（该来源未提供官方入口，请按下面的原链接进）
+    原链接：https://ynnu.jysd.com/news/view/aid/341719/tag/zxzp
+    来源：云南师范大学就业信息网
+
+[49] 04-15]云南省2026年高校毕业生“三支一扶” 计划招募公告
+    公司：云南师范大学就业信息网　城市：昆明　截止：见公告
+    官方投递：—（该来源未提供官方入口，请按下面的原链接进）
+    原链接：https://ynnu.jysd.com/news/view/aid/344147/tag/zxzp
+    来源：云南师范大学就业信息网
+
+[50] 06.11-08.31]已举办云南省2026年高校毕业生百日冲刺系列 ——教育体育行业专场网络网络招聘会，在线投递简历
+    公司：云南师范大学就业信息网　城市：昆明　截止：见公告
+    官方投递：—（该来源未提供官方入口，请按下面的原链接进）
+    原链接：https://job.ynnu.edu.cn/jobfair/view/id/44359
+    来源：云南师范大学就业信息网
+
+[51] 06-11 09:00]已举办2026年云南师范大学促就业攻坚行动暨“宏志助航”招聘会邀请函云南师范大学呈贡校区大学生活动中心101
+    公司：云南师范大学就业信息网　城市：昆明　截止：见公告
+    官方投递：—（该来源未提供官方入口，请按下面的原链接进）
+    原链接：https://job.ynnu.edu.cn/jobfair/view/id/44336
+    来源：云南师范大学就业信息网
+
+[52] 06.20-07.03]已举办2025-2026下学期第十七周校园招聘会网络招聘会，在线投递简历
+    公司：云南师范大学就业信息网　城市：昆明　截止：见公告
+    官方投递：—（该来源未提供官方入口，请按下面的原链接进）
+    原链接：https://job.ynnu.edu.cn/jobfair/view/id/44368
+    来源：云南师范大学就业信息网
+
+[53] 06.28-07.06]已举办2025-2026下学期第十八周校园招聘会网络招聘会，在线投递简历
+    公司：云南师范大学就业信息网　城市：昆明　截止：见公告
+    官方投递：—（该来源未提供官方入口，请按下面的原链接进）
+    原链接：https://job.ynnu.edu.cn/jobfair/view/id/44379
+    来源：云南师范大学就业信息网
+
+[54] 07.06-08.31]已举办2025-2026下学期第十九周校园招聘会网络招聘会，在线投递简历
+    公司：云南师范大学就业信息网　城市：昆明　截止：见公告
+    官方投递：—（该来源未提供官方入口，请按下面的原链接进）
+    原链接：https://job.ynnu.edu.cn/jobfair/view/id/44390
+    来源：云南师范大学就业信息网
+
+[55] 09.09-09.09]已举办2026-2027上学期第一周校园招聘会线上宣讲
+    公司：云南师范大学就业信息网　城市：昆明　截止：见公告
+    官方投递：—（该来源未提供官方入口，请按下面的原链接进）
+    原链接：https://job.ynnu.edu.cn/jobfair/view/id/44487
+    来源：云南师范大学就业信息网
+
+[56] 09-11 14:00]已举办云南师范大学2027届博士毕业生秋季专场招聘会云南师范大学呈贡校区教育学部三楼
+    公司：云南师范大学就业信息网　城市：昆明　截止：见公告
+    官方投递：—（该来源未提供官方入口，请按下面的原链接进）
+    原链接：https://job.ynnu.edu.cn/jobfair/view/id/44499
+    来源：云南师范大学就业信息网
+
+[57] 09-14 14:00]已举办2026-2027上学期第二周校园招聘会云南师范大学呈贡校区西区大学生活动中心101
+    公司：云南师范大学就业信息网　城市：昆明　截止：见公告
+    官方投递：—（该来源未提供官方入口，请按下面的原链接进）
+    原链接：https://job.ynnu.edu.cn/jobfair/view/id/44502
+    来源：云南师范大学就业信息网
+
+[58] 10.15-10.15]千校招聘线路 | 云南师范大学2027届毕业生秋季大型校园招聘会云南师范大学西区大学生活动中心（线下会场）、千校万企云平台（线上会场）
+    公司：云南师范大学就业信息网　城市：昆明　截止：见公告
+    官方投递：—（该来源未提供官方入口，请按下面的原链接进）
+    原链接：https://job.ynnu.edu.cn/jobfair/view/id/44425
+    来源：云南师范大学就业信息网
+
+[59] 09-14]新中国工商银行四川省分行2027年度校园招聘
+    公司：云南师范大学就业信息网　城市：昆明　截止：见公告
+    官方投递：—（该来源未提供官方入口，请按下面的原链接进）
+    原链接：https://job.ynnu.edu.cn/campus/view/id/717224
+    来源：云南师范大学就业信息网
+
+[60] 09-14]新英科再生2026年研发总工和工程师招聘公告
+    公司：云南师范大学就业信息网　城市：昆明　截止：见公告
+    官方投递：—（该来源未提供官方入口，请按下面的原链接进）
+    原链接：https://job.ynnu.edu.cn/campus/view/id/717239
+    来源：云南师范大学就业信息网
+
+注：19 条没有官方入口 —— 高校就业网/公众号这类来源经常只给内推邮箱或跳转页，属正常；按原链接进去后一样能用网申助手填表。
