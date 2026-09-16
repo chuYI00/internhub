@@ -94,6 +94,21 @@ def gen_docs():
     return made
 
 
+def gen_channel_docs():
+    """把「云南秋招渠道地图 / 全网平台矩阵」导成 txt（离线、手机也能看）。"""
+    from ihub import yunnan, platforms
+    folder = os.path.join(ROOT, "备考冲刺资料")
+    os.makedirs(folder, exist_ok=True)
+    made = []
+    for fn, txt in (("云南秋招投递渠道地图.txt", yunnan.as_text()),
+                    ("全网招聘平台矩阵.txt", platforms.as_text())):
+        dst = os.path.join(folder, fn)
+        with open(dst, "w", encoding="utf-8") as f:
+            f.write(txt)
+        made.append(dst)
+    return made
+
+
 def gen_study_docs():
     """把 备考冲刺资料/*.md 转成 docx（考公/考烟草的成品资料，方便打印）。"""
     folder = os.path.join(ROOT, "备考冲刺资料")
@@ -132,7 +147,9 @@ def main() -> int:
     for f in gen_docs():
         _log("      " + os.path.relpath(f, ROOT))
 
-    _log("[6/6] 生成备考资料 docx（备考冲刺资料/）…")
+    _log("[6/6] 生成备考资料 docx + 渠道/平台清单 txt（备考冲刺资料/）…")
+    for _f in gen_channel_docs():
+        _log("      " + os.path.relpath(_f, ROOT))
     _sd = gen_study_docs()
     for f in _sd:
         _log("      " + os.path.relpath(f, ROOT))

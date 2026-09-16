@@ -849,12 +849,64 @@ def main():
     # ============ 🌏 云南秋招（昆明 / 大理 投递渠道地图） ============
     with tab10:
         from ihub import yunnan as yn
+        from ihub import platforms as P
 
         st.markdown("#### 🌏 云南秋招投递渠道地图（昆明 / 大理）")
         st.caption("通用平台抓不到的（要登录、动态渲染、只走公众号）这里用「渠道地图」兜住："
                    "每个单位一条，给官方公告页 / 网申入口 / 搜索直达。链接会变，但「去哪找」不会变。")
         st.info("**你的定位**：2027 届 · 昆明 + 大理 · 央国企为主 · 不限企业类型 · 重点备考烟草。"
                 "下面按「与你专业的契合度」排了序，★★★★ 以上的就是最该投的。")
+
+        # ────────────── 全网平台入口（BOSS / 智联 / 牛客 / 国聘 / 24365 …）──────────────
+        st.markdown("##### 🌐 全网平台入口（点一下就直接跳到该平台去搜）")
+        st.caption("实测结论：BOSS直聘、智联、前程无忧、猎聘、牛客、国聘网、24365、高校人才网 "
+                   "**全是前端渲染**，静态爬虫拿不到岗位（硬爬违反 robots、随时失效）。"
+                   "所以这里给的是【搜索直达】：点开＝在该平台内搜「昆明/大理 + 你的专业 + 应届」，"
+                   "绕开登录墙，永远不会 404。")
+
+        with st.expander("🗓 今天该干什么（6 步，照做就不漏公告）", expanded=True):
+            for _i, (_step, _task, _url) in enumerate(P.today_plan(), 1):
+                _c1, _c2 = st.columns([5, 1])
+                _c1.markdown(f"**{_step}**　{_task}")
+                if _url:
+                    _c2.link_button("打开", _url, key=f"tp_{_i}")
+
+        _JOB_KW = ("嵌入式", "物联网", "自动化", "电子信息", "通信", "运维", "测试")
+        with st.expander("🔍 搜索关键词（在每个平台都用这一套，轮着搜）", expanded=False):
+            st.markdown("**专业词**：" + "　".join(f"`{k}`" for k in _JOB_KW) +
+                        "　`应届生`　`校招`　`2027届`")
+            st.markdown("**云南行业词**：`烟草`　`中烟`　`电网`　`机场`　`空管`　`地铁`　`国企`　`事业单位`")
+            st.caption("同一个平台换几个词搜，结果差别很大 —— 只搜一个词会漏掉一半岗位。")
+
+        for _cat, _items in P.cats_in_order():
+            with st.expander(f"{_cat}（{len(_items)} 个）", expanded=("云南本地" in _cat)):
+                for _j, _p in enumerate(_items):
+                    _badge = "需登录" if _p["login"] else "免登录"
+                    st.markdown(f'**{_p["name"]}**　<small>· {_badge} · {_p["crawl"]}</small>',
+                                unsafe_allow_html=True)
+                    st.caption("适配：" + _p["fit"])
+                    st.caption("怎么筛：" + _p["how"])
+                    if _p["tip"]:
+                        st.caption("提醒：" + _p["tip"])
+                    _b = st.columns([1, 1, 1])
+                    _b[0].link_button("🔗 打开官网", _p["url"], key=f"pl_u_{_cat[:2]}_{_j}")
+                    _b[1].link_button("🔍 搜云南应届岗",
+                                      P.bd_site(_p["domain"], "昆明 大理 招聘 应届"),
+                                      key=f"pl_s_{_cat[:2]}_{_j}")
+                    _b[2].link_button("💬 微信搜公告", P.wx("云南 国企 招聘 2027 应届"),
+                                      key=f"pl_w_{_cat[:2]}_{_j}")
+                    st.markdown("")
+
+        with st.expander("🔗 全部搜索直达链接（一键复制，也能存到手机）", expanded=False):
+            st.code(P.links_text(), language=None)
+
+        _pd1, _pd2 = st.columns([1, 3])
+        _pd1.download_button("⬇ 下载平台矩阵（txt）", data=P.as_text().encode("utf-8"),
+                             file_name="全网招聘平台矩阵.txt", mime="text/plain", key="pl_dl")
+        _pd2.caption("20+ 个正规平台（国家级官方 / 综合招聘 / 校招垂直 / 云南本地高校）。"
+                     "凡是要你先交钱的「内推 · 保offer」一律是骗子。")
+
+        st.divider()
 
         y1, y2, y3 = st.columns([1, 1, 2])
         with y1:

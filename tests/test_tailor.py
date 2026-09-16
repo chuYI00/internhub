@@ -174,6 +174,36 @@ def main() -> int:
         (u.get("apply","").startswith("http") or not u.get("apply")) and
         u["search"].startswith("http") for u in units))
 
+    print("[10] 全网平台矩阵")
+    from ihub import platforms as PL
+    plats = PL.all_platforms()
+    check("平台数 ≥20", len(plats) >= 20, len(plats))
+    check("分 4 大类", len(PL.cats_in_order()) == 4, len(PL.cats_in_order()))
+    check("第一类是国家级官方", "国家级官方" in PL.cats_in_order()[0][0])
+    names = " ".join(x["name"] for x in plats)
+    for kw in ("国聘网", "24365", "BOSS直聘", "智联", "牛客", "应届生求职网",
+               "云南人才网", "中国民航大学", "大理"):
+        check(f"含平台「{kw}」", kw in names)
+    check("每个平台都有 官网/适配/怎么筛", all(
+        x["url"].startswith("http") and x["fit"] and x["how"] for x in plats))
+    check("每条都标注了 是否需登录 + 能否自动抓", all(
+        isinstance(x["login"], bool) and x["crawl"] for x in plats))
+    check("有可自动抓的平台", len(PL.auto_crawlable()) >= 6, len(PL.auto_crawlable()))
+    links = PL.search_links()
+    check("搜索直达 ≥20 条", len(links) >= 20, len(links))
+    check("搜索直达全部是 http(s)", all(u.startswith("http") for _, u, _ in links))
+    check("搜索直达是「站内搜」不是瞎编的深链",
+          all("%3A" in u or "site" in u or "weixin" in u for _, u, _ in links))
+    check("点开的搜索链接带云南关键词",
+          all(("昆明" in u) or ("%E6%98%86%E6%98%8E" in u) or ("云南" in u) or ("%E4%BA%91" in u)
+              for _, u, _ in links))
+    check("今天该干什么 6 步", len(PL.today_plan()) == 6, len(PL.today_plan()))
+    txt = PL.as_text()
+    check("导出文本含 BOSS 与 应届生", "BOSS" in txt and "应届生" in txt)
+    check("导出文本说明了「前端渲染抓不到」", "前端渲染" in txt)
+    check("links_text 可直接复制（含 20 条链接）",
+          PL.links_text().count("http") >= 20, PL.links_text().count("http"))
+
     print(f"\n结果: {PASS} 通过, {FAIL} 失败")
     return 1 if FAIL else 0
 
