@@ -42,10 +42,14 @@ def main() -> int:
 
     results["采集助手（油猴版）"] = run(
         ["node", "tests/collector_dom_test.js"], "采集助手 .user.js")
+    results["网申助手·ATS 兼容（北森/antd/element）"] = run(
+        ["node", "tests/autofill_ats_test.js"], "企业自有网申系统（自绘下拉/卡片单选）")
     results["网申助手（油猴版）"] = run(
         ["node", "tests/autofill_dom_test.js"], "网申助手 .user.js")
     results["采集书签（免插件版）"] = run(
         ["node", "tests/bookmarklet_test.js"], "采集书签 采集书签.txt")
+    results["采集链路（跳转壳解码 + 数据源并集 + 官网匹配）"] = run(
+        [PY, "tests/test_weblist.py"], "采集：官方投递入口/公司名/数据源")
     results["CSV 导入链路"] = run(
         [PY, "tests/test_import_csv.py"], "CSV 导入 → 入库")
     results["网页端冒烟（11 个页签 + 广投按钮）"] = run(
