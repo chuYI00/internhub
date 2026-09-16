@@ -38,13 +38,43 @@ DATE_RE = re.compile(r"(20\d{2}[-/年.]\d{1,2}[-/月.]\d{1,2})")
 
 
 def load_sources():
-    for p in (SOURCES_PATH, SOURCES_FALLBACK):
+    """读取数据源清单（两个位置取并集）。
+
+    历史坑（已修）：项目根 `sources.json`（随 Git 版本管理，权威）与
+    `data/sources.json`（旧位置，且在 .gitignore 里）曾同时存在。
+    只读根目录 → 往 data/ 里加的源**永远不生效，还没有任何提示**。
+    现在两个文件取并集（同名以根目录为准），并明确提示被遮蔽的条目。
+    """
+    merged, origin = [], {}
+    lists = {}
+    for path, label, is_primary in ((SOURCES_PATH, "项目根", True),
+                                    (SOURCES_FALLBACK, "data/", False)):
         try:
-            with open(p, "r", encoding="utf-8") as f:
-                return json.load(f)
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
         except Exception:
             continue
-    return []
+        names = []
+        for s in data or []:
+            name = (s or {}).get("name")
+            if not name:
+                continue
+            names.append(name)
+            if name in origin:
+                continue
+            merged.append(s)
+            origin[name] = label
+        lists[label] = set(names)
+    # 只在两处不一致时才提示（一致就静默，避免每次都刷屏）
+    only_legacy = lists.get("data/", set()) - lists.get("项目根", set())
+    only_root = lists.get("项目根", set()) - lists.get("data/", set())
+    if only_legacy or only_root:
+        print(f"[数据源] 两处清单不一致：只在 data/sources.json 的 {len(only_legacy)} 条"
+              f"{'（' + '、'.join(sorted(only_legacy)[:4]) + '…）' if only_legacy else ''}；"
+              f"只在项目根的 {len(only_root)} 条"
+              f"{'（' + '、'.join(sorted(only_root)[:4]) + '…）' if only_root else ''}。"
+              f"已自动取并集，建议把权威清单统一到 {SOURCES_PATH}")
+    return merged
 
 
 def _text(html_fragment):
@@ -66,8 +96,8 @@ def _clean_title(t: str) -> str:
     return t
 
 
-def _is_meaningful(t: str) -> bool:
-    if len(t) < 8:
+def _is_meaningful(t: str, min_len: int = 8) -> bool:
+    if len(t) < min_len:
         return False
     if len(re.findall(r"[\u4e00-\u9fa5]", t)) < 4:                 # 至少 4 个汉字
         return False
@@ -132,9 +162,12 @@ class WebListCrawler(BaseCrawler):
         ex_re = re.compile(s["exclude_keyword_regex"]) if s.get("exclude_keyword_regex") else None
         base = s.get("base") or ""
         seen = set()
+        # 单源可覆盖标题最小长度：本地人才网的岗位名常是 6-7 字（如「风电运维工程师」），
+        # 用全局的 8 字门槛会把它们整片滤掉。
+        min_len = int(s.get("min_title_len") or 8)
         for href, inner in A_RE.findall(html):
             title = _clean_title(_text(inner))
-            if not _is_meaningful(title):
+            if not _is_meaningful(title, min_len):
                 continue
             if link_re and not link_re.search(href):
                 continue
