@@ -376,6 +376,23 @@ def main():
         newvals["certificates"] = st.text_input("证书", value=cur.get("certificates", ""))
         newvals["self_eval"] = st.text_area("自我评价", value=cur.get("self_eval", ""), height=90)
 
+        with st.expander("④ 网申补充字段（决定「网申助手」能自动填多少，建议都填上）", expanded=True):
+            st.caption("这些是国内网申系统几乎必问的项，但简历上用不到，所以单独放这里。"
+                       "**留空 = 自动跳过该字段**；也可以在网申页面的面板里当场补（存在本机浏览器）。")
+            extra = [("birth", "出生日期（2005-03）"), ("political", "政治面貌"), ("nation", "民族"),
+                     ("college", "学院"), ("enroll", "入学时间（2023.09）"), ("rank", "专业排名"),
+                     ("hometown", "籍贯 / 生源地"), ("address", "通讯地址"), ("postal", "邮编"),
+                     ("wechat", "微信号"), ("qq", "QQ 号"), ("idcard", "身份证号（敏感，可留空）"),
+                     ("expected_city", "期望工作城市"), ("expected_salary", "期望薪资"),
+                     ("available", "到岗时间 / 可实习时长"), ("marital", "婚姻状况"),
+                     ("emergency_name", "紧急联系人"), ("emergency_phone", "紧急联系人电话"),
+                     ("emergency_relation", "与本人关系")]
+            ecols = st.columns(2)
+            for i, (k, label) in enumerate(extra):
+                with ecols[i % 2]:
+                    newvals[k] = st.text_input(label, value=st.session_state.get(f"pf_{k}", cur.get(k, "")),
+                                               key=f"in2_{k}")
+
         c1, c2 = st.columns([1, 3])
         if c1.button("💾 保存资料", type="primary"):
             p = prof_mod.save(newvals)
@@ -397,12 +414,13 @@ def main():
                     "**「📥 采集本页岗位」** 导出 CSV → ⑤ 到「📚 备考方案」页底部上传该 CSV，一键入库。")
 
         st.divider()
-        st.markdown("#### 🧩 网申自动填写助手（解决秋招网申一个个填很慢）")
-        st.caption("原理：用你本机的资料生成一个**浏览器用户脚本**，在任意公司网申页面右下角出现「📝 填入我的资料」按钮，"
-                   "点击后自动把姓名/手机/邮箱/学校/专业/毕业时间/GPA/自我评价等填进匹配的输入框（蓝框=已填），你核对后再自己提交。"
-                   "**不代登录、不代提交、不绕过验证码**，完全由你手动触发。")
+        st.markdown("#### 🧩 网申自动填写助手 v2（解决秋招网申一个个填很慢）")
+        st.caption("在任意公司的网申页面右下角会出现**「📝 网申助手」**小按钮：点开是一个资料面板，"
+                   "可以当场看到/补改每个字段，再选**「填入空字段」**或**「覆盖全部」**。"
+                   "支持 text/textarea/**下拉框**/单选/日期/富文本，**表单在 iframe 里也能填**（很多网申系统就是这种）。"
+                   "\n\n**不代登录、不代提交、不绕过验证码、不联网**：只在你点击时写你浏览器里已经打开的页面。")
         st.markdown("**安装步骤**：① 浏览器装 Tampermonkey（油猴）扩展 → ② 点下面按钮生成脚本 → "
-                    "③ 把生成的文件拖进浏览器（或 Tampermonkey 里新建脚本粘贴内容）→ ④ 打开任意网申页面点右下角按钮")
+                    "③ 把生成的文件拖进浏览器（或 Tampermonkey 里新建脚本粘贴内容）→ ④ 打开任意网申页面点右下角「📝 网申助手」")
         if st.button("⬇️ 生成/更新 网申助手.user.js"):
             from ihub import autofill
             path = autofill.save_userscript(prof=prof_mod.load())

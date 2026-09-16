@@ -40,6 +40,8 @@ def main() -> int:
 
     results["采集助手（油猴版）"] = run(
         ["node", "tests/collector_dom_test.js"], "采集助手 .user.js")
+    results["网申助手（油猴版）"] = run(
+        ["node", "tests/autofill_dom_test.js"], "网申助手 .user.js")
     results["采集书签（免插件版）"] = run(
         ["node", "tests/bookmarklet_test.js"], "采集书签 采集书签.txt")
     results["CSV 导入链路"] = run(
