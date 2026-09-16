@@ -85,15 +85,17 @@ console.log('[3] 下拉框：性别 / 学历 / 籍贯（省市）');
   const degSel = select(['请选择', '大专', '本科及以上', '硕士研究生', '博士研究生'], { name: 'degree' });
   const homeSel = select(['请选择', '北京市', '云南省', '四川省'], { name: 'hometown' });
   const citySel = select(['请选择', '云南省', '四川省'], { name: 'currentCity' });
+  const rankSel = select(['请选择', '前 10%', '前 30%', '前 50%'], { name: 'rank' });
   root.appendChild(fieldRow('性别', sexSel));
   root.appendChild(fieldRow('最高学历', degSel));
   root.appendChild(fieldRow('籍贯', homeSel));
   root.appendChild(fieldRow('现居住地', citySel));
+  // 专业排名在 profile.json 里留空 —— 这正是"面板里当场补"的典型场景
+  root.appendChild(fieldRow('专业排名', rankSel));
 
   const { api } = run(root);
-  // 籍贯在 profile.json 里默认是空的 —— 这正是"面板里当场补"的典型场景
   const noHome = api.fillDoc(sandboxDoc(root), 'empty');
-  check('籍贯未填时留空（不瞎猜）', homeSel.value === '请选择', homeSel.value);
+  check('没资料的字段留空（不瞎猜）', rankSel.value === '请选择', rankSel.value);
   api.setOverride('hometown', '云南大理');
   const st = api.fillDoc(sandboxDoc(root), 'overwrite');
   check('性别选中「男」', sexSel.value === '男', sexSel.value);
@@ -101,7 +103,7 @@ console.log('[3] 下拉框：性别 / 学历 / 籍贯（省市）');
   check('籍贯「云南大理」命中「云南省」', homeSel.value === '云南省', homeSel.value);
   check('现居「云南大理」命中「云南省」', citySel.value === '云南省', citySel.value);
   check('面板补完籍贯后 4 个下拉全中', st.filled === 4, st.filled);
-  check('第一轮只填了 3 个（籍贯没有值）', noHome.filled === 3, noHome.filled);
+  check('第一轮只填资料里已有的 4 个', noHome.filled === 4, noHome.filled);
 }
 
 /* ---------- 4. 单选组（性别 radio） ---------- */
@@ -176,18 +178,18 @@ console.log('[7] 特殊控件：date / month / number / contenteditable');
 }
 
 /* ---------- 8. 页面上就地改资料（localStorage 覆盖） ---------- */
-console.log('[8] 就地补改：政治面貌 = 共青团员（不重新生成脚本）');
+console.log('[8] 就地补改：专业排名 = 前 30%（不重新生成脚本）');
 {
   const root = new El('body');
   const p = input({});
-  root.appendChild(fieldRow('政治面貌', p));
+  root.appendChild(fieldRow('专业排名', p));
   const { api, sandbox } = run(root);
   let st = api.fillDoc(sandboxDoc(root), 'empty');
-  check('资料里没有政治面貌时留空', p.value === '', p.value);
-  api.setOverride('political', '共青团员');
+  check('资料里没有专业排名时留空', p.value === '', p.value);
+  api.setOverride('rank', '前 30%');
   st = api.fillDoc(sandboxDoc(root), 'overwrite');
-  check('补改后能填入', p.value === '共青团员', p.value);
-  check('覆盖值存在 localStorage', JSON.parse(sandbox.localStorage.getItem('ihub_profile_overrides_v1')).political === '共青团员');
+  check('补改后能填入', p.value === '前 30%', p.value);
+  check('覆盖值存在 localStorage', JSON.parse(sandbox.localStorage.getItem('ihub_profile_overrides_v1')).rank === '前 30%');
   api.clearOverrides();
   check('恢复内置后覆盖清空', Object.keys(api.getOverrides()).length === 0);
 }

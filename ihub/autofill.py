@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
-"""网申自动填写助手 v2：根据个人资料生成本地用户脚本（Tampermonkey）。
+"""网申自动填写助手 v3：根据个人资料生成本地用户脚本（Tampermonkey）+ 免装扩展的书签版。
 
 设计原则（合规、安全）：
 - 只在**你本人打开的网页**上工作，由你点按钮触发填写，**不登录、不提交、不绕过验证码、不联网**；
-- 资料来自本机 data/profile.json，可以在页面上就地补改（存在浏览器 localStorage，不出本机）；
+- 资料来自本机 data/profile.json（可叠加 data/resume_kit.json 的岗位方向话术），
+  也能在页面上就地补改（存在浏览器 localStorage / 油猴存储，不出本机）；
 - 填充后逐个高亮，由你核对后再自己点提交。
 
-v2 相比 v1 的改进（v1 的致命问题：把整个表单的文字当成字段名，导致乱填）：
-1. **标签识别更准**：aria-label / aria-labelledby / placeholder / title / data-* / name / id /
-   <label for> / 包裹 label / 最近的"小容器"文字（容器里控件数 ≤2 才采用）/ 前一个兄弟文本 / 表格上一格
-2. **支持控件类型**：text、textarea、select（含学历"本科→本科及以上"这类模糊匹配）、
-   radio（性别等）、date/month（自动格式化）、number（GPA 去掉 /4.0）、tel、email、contenteditable 富文本
-3. **字段更全**：政治面貌、民族、籍贯、学院、排名、紧急联系人、期望城市/薪资、到岗时间、项目经历等
-4. **面板式交互**：右下角小按钮 → 展开资料面板，可当场补改缺失项、看到会填什么，再选择"只填空/覆盖"
-5. **支持 iframe**：很多网申系统把表单放在 iframe 里，点一次会向所有子框架广播（postMessage）
-6. **SPA 友好**：按钮被前端框架冲掉会自动重新挂上
+v3 相比 v2 的变化：
+1. **按岗位方向切换**：面板第一行多了「岗位方向」下拉，选完点填入，自我评价 / 技能 / 亮点
+   会换成该方向的口径（9 套：万能通用 + 嵌入式 / IoT / AI / 自动化 / 测试运维 / 民航国企 / 产品 / 内容运营）。
+2. **可见性判断修好了**：不再用"零尺寸"判隐藏（折叠区与无布局环境下会误杀整页字段），
+   改成"有尺寸即视为可见，否则查 display/visibility 样式链"。
+3. **单选组识别更准**：用共同祖先取"整组题目文字"，避免只拿到选项文字（"男"）而匹配不到"性别"。
+4. **富文本判断更稳**：查 contenteditable 属性，不只依赖 el.isContentEditable。
+5. 非 input/textarea/select 的自造控件不再走原生 value setter（避免 Illegal invocation）。
 """
 import json
 import os
@@ -23,24 +23,40 @@ import re
 from . import config, profile as profile_mod
 
 SCRIPT_NAME = "网申助手.user.js"
+BOOKMARK_NAME = "网申书签.txt"
 
 # 嵌入脚本的资料键（多出来的键也会一起带上，面板里能改）
-KEYS = [
-    "name", "gender", "birth", "political", "nation", "idcard",
-    "phone", "email", "wechat", "qq",
-    "school", "college", "major", "degree", "edu_range", "enroll", "graduate_year",
-    "gpa", "rank", "city", "hometown", "address", "postal",
-    "english", "certificates", "scholarship",
-    "intent", "expected_city", "expected_salary", "available",
-    "self_eval", "highlights", "skills", "experiences",
-    "emergency_name", "emergency_phone", "emergency_relation",
-]
+try:
+    from . import tailor as _tailor
+    KEYS = list(_tailor.SCRIPT_KEYS)
+except Exception:                                     # pragma: no cover - 兜底
+    _tailor = None
+    KEYS = [
+        "name", "gender", "birth", "political", "nation", "idcard",
+        "phone", "email", "wechat", "qq",
+        "school", "college", "major", "degree", "edu_range", "enroll", "graduate_year",
+        "gpa", "rank", "city", "hometown", "address", "postal",
+        "english", "certificates", "scholarship",
+        "intent", "expected_city", "expected_salary", "available",
+        "self_eval", "highlights", "skills", "experiences", "reason",
+        "emergency_name", "emergency_phone", "emergency_relation", "marital",
+    ]
+
+
+def _packs() -> dict:
+    if _tailor is None:
+        return {}
+    try:
+        return _tailor.packs()
+    except Exception:
+        return {}
+
 
 _TEMPLATE = r"""// ==UserScript==
-// @name         网申助手 v2（本地·本人使用）
+// @name         网申助手 v3（本地·本人使用）
 // @namespace    internhub.local
-// @version      2.1
-// @description  在网申/校招表单页一键填入个人资料；本人点击触发，不代登录、不代提交、不联网
+// @version      3.0
+// @description  在网申/校招表单页一键填入个人资料，可按岗位方向切换自我评价/技能；本人点击触发，不代登录、不代提交、不联网
 // @match        *://*/*
 // @match        file:///*
 // @grant        GM_getValue
@@ -55,7 +71,9 @@ _TEMPLATE = r"""// ==UserScript==
   'use strict';
 
   var BASE = __PAYLOAD__;
+  var PACKS = __PACKS__;
   var LS_KEY = 'ihub_profile_overrides_v1';
+  var LS_DIR = 'ihub_autofill_dir_v1';
 
   /* ==================== 存储（优先油猴存储，退化为 localStorage） ==================== */
   var GM_OK = (typeof GM_getValue === 'function' && typeof GM_setValue === 'function');
@@ -86,7 +104,22 @@ _TEMPLATE = r"""// ==UserScript==
     storeSet(LS_KEY, JSON.stringify(o));
   }
   function clearOverrides() { storeDel(LS_KEY); }
-  function P() { return Object.assign({}, BASE, overrides()); }
+  function getDir() {
+    var d = storeGet(LS_DIR) || 'universal';
+    return PACKS[d] ? d : 'universal';
+  }
+  function setDir(d) { storeSet(LS_DIR, d); }
+
+  // 最终资料 = 内置 BASE ← 岗位方向包 PACKS[dir] ← 本机手动覆盖
+  function P() {
+    var out = {}, k;
+    for (k in BASE) out[k] = BASE[k];
+    var pk = PACKS[getDir()];
+    if (pk) { for (k in pk) out[k] = pk[k]; }
+    var ov = overrides();
+    for (k in ov) out[k] = ov[k];
+    return out;
+  }
 
   /* ==================== 字段字典 ==================== */
   // keys 里不要放"城市""时间"这种会跟别的字段打架的短词；匹配时取"命中关键词最长"的那个字段
@@ -94,7 +127,7 @@ _TEMPLATE = r"""// ==UserScript==
     { k: 'name',      label: '姓名',     keys: ['姓名', '真实姓名', '中文姓名', 'name', 'fullname'] },
     { k: 'gender',    label: '性别',     keys: ['性别', 'gender', 'sex'] },
     { k: 'birth',     label: '出生日期', keys: ['出生日期', '出生年月', '生日', 'birthday', 'birth'] },
-    { k: 'political', label: '政治面貌', keys: ['政治面貌', '政治面貌情况', 'party'] },
+    { k: 'political', label: '政治面貌', keys: ['政治面貌', 'party'] },
     { k: 'nation',    label: '民族',     keys: ['民族', 'nation', 'ethnic'] },
     { k: 'idcard',    label: '身份证号', keys: ['身份证号', '身份证件号', '身份证', 'idcard', 'idnumber'] },
     { k: 'phone',     label: '手机号',   keys: ['手机号', '手机号码', '联系电话', '联系方式', '手机', '电话', 'phone', 'mobile', 'tel'] },
@@ -111,7 +144,7 @@ _TEMPLATE = r"""// ==UserScript==
     { k: 'gpa',       label: 'GPA',      keys: ['gpa', '绩点', '平均分', '平均成绩'] },
     { k: 'rank',      label: '专业排名', keys: ['专业排名', '年级排名', '排名', 'rank'] },
     { k: 'city',      label: '现居地',   keys: ['现居住地', '现居地', '目前居住', '居住城市', '所在地', '当前城市', '现居', 'currentcity'] },
-    { k: 'hometown',  label: '籍贯',     keys: ['籍贯', '生源地', '户籍所在地', '户籍地', '户口所在地', '民族籍贯', 'hometown', 'nativeplace'] },
+    { k: 'hometown',  label: '籍贯',     keys: ['籍贯', '生源地', '户籍所在地', '户籍地', '户口所在地', 'hometown', 'nativeplace'] },
     { k: 'address',   label: '通讯地址', keys: ['通讯地址', '联系地址', '邮寄地址', '详细地址', '家庭住址', 'address'] },
     { k: 'postal',    label: '邮编',     keys: ['邮编', '邮政编码', 'postal', 'zip'] },
     { k: 'english',   label: '外语水平', keys: ['外语水平', '英语水平', '英语等级', '四六级', 'cet', 'englishlevel'] },
@@ -125,21 +158,38 @@ _TEMPLATE = r"""// ==UserScript==
     { k: 'experiences', label: '项目/实习经历', keys: ['项目经历', '实习经历', '工作经历', '实践经历', '项目经验', 'experience'] },
     { k: 'skills',    label: '技能特长', keys: ['技能', '专业技能', '特长', '擅长', 'skill'] },
     { k: 'highlights', label: '个人亮点', keys: ['个人亮点', '主要成绩', '优势亮点', 'highlight'] },
+    { k: 'reason',    label: '申请理由', keys: ['申请理由', '求职信', '自荐信', '申请说明', 'coverletter'] },
     { k: 'emergency_name', label: '紧急联系人', keys: ['紧急联系人', '紧急联络人', '联系人姓名', 'emergencyname'] },
     { k: 'emergency_phone', label: '紧急联系人电话', keys: ['紧急联系人电话', '紧急联系电话', '联系人电话', 'emergencyphone'] },
     { k: 'emergency_relation', label: '与本人关系', keys: ['与本人关系', '联系人与本人关系', '关系', 'relation'] },
-    { k: 'marital',   label: '婚姻状况', keys: ['婚姻状况', '婚否', 'marital'] },
+    { k: 'marital',   label: '婚姻状况', keys: ['婚姻状况', '婚否', 'marital'] }
   ];
 
   /* ==================== 工具 ==================== */
   function norm(s) { return String(s == null ? '' : s).replace(/[\s\u3000*＊:：?？()（）、,，.。/|]/g, '').toLowerCase(); }
   function visText(el) { return String((el && (el.innerText || el.textContent)) || '').replace(/\s+/g, ' ').trim(); }
   function isVisible(el) {
-    if (!el || !el.getBoundingClientRect) return true;
+    if (!el) return true;
+    try { if (el.hidden) return false; } catch (e) {}
+    // 1) 有实际尺寸 → 可见
     try {
-      var r = el.getBoundingClientRect();
-            if (r && r.width === 0 && r.height === 0) return false;  /* 隐藏域/折叠区 */
+      var r = el.getBoundingClientRect && el.getBoundingClientRect();
+      if (r && r.width > 0 && r.height > 0) return true;
     } catch (e) {}
+    // 2) 尺寸为 0（折叠区 / 隐藏域 / 无布局环境）→ 再看样式链：
+    //    只有真的 display:none / visibility:hidden / opacity:0 才当成不可见，
+    //    避免"整页零尺寸"的环境（含测试打桩 DOM）下把表单全部跳过。
+    var n = el, depth = 0, view = el.ownerDocument && el.ownerDocument.defaultView;
+    while (n && n.nodeType === 1 && depth < 8) {
+      try {
+        var cs = view && view.getComputedStyle ? view.getComputedStyle(n) : null;
+        if (cs) {
+          if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+          if (cs.opacity === '0') return false;
+        }
+      } catch (e) {}
+      n = n.parentElement; depth++;
+    }
     return true;
   }
   function controlCount(node) {
@@ -205,6 +255,32 @@ _TEMPLATE = r"""// ==UserScript==
     return parts.filter(Boolean).join(' | ');
   }
 
+  // 单选组：第一项的 labelOf 往往只拿到选项文字（"男"），还要向上取"整组的题目文字"
+  function commonAncestor(nodes) {
+    if (!nodes || !nodes.length) return null;
+    var a = nodes[0];
+    while (a && a.nodeType === 1) {
+      var all = true;
+      for (var i = 1; i < nodes.length; i++) {
+        if (!(a.contains && a.contains(nodes[i]))) { all = false; break; }
+      }
+      if (all) return a;
+      a = a.parentElement;
+    }
+    return null;
+  }
+  function groupLabel(group, doc) {
+    var parts = [labelOf(group[0], doc)];
+    if (group[0].name) parts.push(group[0].name);
+    var anc = commonAncestor(group), depth = 0;
+    while (anc && depth < 4) {
+      var t = visText(anc);
+      if (t && t.length <= 60) { parts.push(t); break; }
+      anc = anc.parentElement; depth++;
+    }
+    return parts.filter(Boolean).join(' | ');
+  }
+
   // 返回命中的字段（取"命中关键词最长"者，降低误配）
   function bestField(label) {
     var L = norm(label);
@@ -231,9 +307,11 @@ _TEMPLATE = r"""// ==UserScript==
     var tag = el.tagName, proto = null;
     if (tag === 'TEXTAREA') proto = window.HTMLTextAreaElement && HTMLTextAreaElement.prototype;
     else if (tag === 'SELECT') proto = window.HTMLSelectElement && HTMLSelectElement.prototype;
-    else proto = window.HTMLInputElement && HTMLInputElement.prototype;
-    var d = proto && Object.getOwnPropertyDescriptor(proto, 'value');
-    if (d && d.set) d.set.call(el, val); else el.value = val;
+    else if (tag === 'INPUT') proto = window.HTMLInputElement && HTMLInputElement.prototype;
+    if (!proto) { try { el.value = val; } catch (e) {} fire(el); return; }   /* div 等自造控件 */
+    var d = Object.getOwnPropertyDescriptor(proto, 'value');
+    try { if (d && d.set) d.set.call(el, val); else el.value = val; }
+    catch (e) { try { el.value = val; } catch (e2) {} }
     fire(el);
   }
   function mark(el, ok) {
@@ -244,25 +322,24 @@ _TEMPLATE = r"""// ==UserScript==
     if (!w || !t) return false;
     if (w === t) return true;
     if (w.indexOf(t) >= 0 || t.indexOf(w) >= 0) return true;
-        if (w.length >= 2 && t.length >= 2 && w.slice(0, 2) === t.slice(0, 2)) return true;  /* 云南大理 ↔ 云南省 */
+    if (w.length >= 2 && t.length >= 2 && w.slice(0, 2) === t.slice(0, 2)) return true;  /* 云南大理 ↔ 云南省 */
     return false;
   }
   function fillSelect(el, val) {
     var opts = Array.prototype.slice.call(el.options || []);
     if (!opts.length) return false;
     var hit = null, i;
-        for (i = 0; i < opts.length; i++) {  /* 1) 精确 */
+    for (i = 0; i < opts.length; i++) {   /* 1) 精确 */
       if (norm(opts[i].value) === norm(val) || norm(opts[i].textContent) === norm(val)) { hit = opts[i]; break; }
     }
-        if (!hit) for (i = 0; i < opts.length; i++) {  /* 2) 互相包含/前两字相同 */
+    if (!hit) for (i = 0; i < opts.length; i++) {   /* 2) 互相包含 / 前两字相同 */
       if (looseMatch(val, opts[i].textContent) || looseMatch(val, opts[i].value)) { hit = opts[i]; break; }
     }
     if (!hit) return false;
     try { el.value = hit.value; } catch (e) {}
     if (el.value !== hit.value) { hit.selected = true; }
-    if (el.selectedIndex >= 0 && el.options[el.selectedIndex] && norm(el.options[el.selectedIndex].textContent) !== norm(hit.textContent)) {
-            hit.selected = true;  /* 有些框架要手动置 selected */
-    }
+    if (el.selectedIndex >= 0 && el.options[el.selectedIndex] &&
+        norm(el.options[el.selectedIndex].textContent) !== norm(hit.textContent)) { hit.selected = true; }
     fire(el);
     return true;
   }
@@ -288,8 +365,12 @@ _TEMPLATE = r"""// ==UserScript==
   }
 
   /* ==================== 主流程 ==================== */
+  function isEditable(el) {
+    try { if (el.isContentEditable) return true; } catch (e) {}
+    return String(attr(el, 'contenteditable') || '').toLowerCase() === 'true';
+  }
   function hasValue(el) {
-    if (el.isContentEditable) return visText(el).length > 0;
+    if (isEditable(el)) return visText(el).length > 0;
     if (el.tagName === 'SELECT') return el.selectedIndex > 0;
     return String(el.value == null ? '' : el.value).trim().length > 0;
   }
@@ -319,7 +400,7 @@ _TEMPLATE = r"""// ==UserScript==
     Object.keys(groups).forEach(function (key) {
       var g = groups[key];
       if (onlyEmpty && g.some(function (r) { return r.checked; })) return;
-      var f = bestField(labelOf(g[0], doc) + ' ' + (g[0].name || ''));
+      var f = bestField(groupLabel(g, doc));
       if (!f) return;
       var val = prof[f.k];
       if (!val) return;
@@ -351,7 +432,7 @@ _TEMPLATE = r"""// ==UserScript==
       var ok = false;
       try {
         if (el.tagName === 'SELECT') ok = fillSelect(el, val);
-        else if (el.isContentEditable) { el.innerText = val; fire(el); ok = true; }
+        else if (isEditable(el)) { el.innerText = val; fire(el); ok = true; }
         else if (String(attr(el, 'readonly')) === 'true' || el.readOnly) { return; }
         else { setNative(el, val); ok = true; }
       } catch (e) { ok = false; }
@@ -364,13 +445,14 @@ _TEMPLATE = r"""// ==UserScript==
   // __BOOKMARK_CUT__ 书签版从这里截断（书签版没法往子框架注入脚本）
   var isTop = (function () { try { return window.top === window; } catch (e) { return false; } })();
   function broadcast(mode) {
-    var msg = { __ihub: 'fill', mode: mode };
+    var msg = { __ihub: 'fill', __lgr: 'fill', mode: mode, dir: getDir() };
     try { for (var i = 0; i < window.frames.length; i++) window.frames[i].postMessage(msg, '*'); } catch (e) {}
   }
   window.addEventListener('message', function (ev) {
     var d = ev.data;
-    if (!d || d.__ihub !== 'fill') return;
-        if (ev.source === window) return;  /* 别理自己 */
+    if (!d || (d.__ihub !== 'fill' && d.__lgr !== 'fill')) return;
+    if (ev.source === window) return;   /* 别理自己 */
+    if (d.dir && PACKS[d.dir]) setDir(d.dir);
     var st = fillDoc(document, d.mode);
     try {
       var up = isTop ? window : window.parent;
@@ -379,7 +461,7 @@ _TEMPLATE = r"""// ==UserScript==
   });
 
   /* ==================== 面板 ==================== */
-  var panel = null, statusEl = null, listEl = null;
+  var panel = null, statusEl = null, listEl = null, dirSel = null;
 
   function el(tag, css, text) {
     var d = document.createElement(tag);
@@ -401,7 +483,8 @@ _TEMPLATE = r"""// ==UserScript==
     var prof = P(), ov = readOverrides();
     FIELDS.forEach(function (f) {
       var row = el('div', 'display:flex;gap:6px;align-items:center;margin:3px 0');
-      var tag = el('div', 'flex:0 0 84px;color:' + (f.k in ov ? '#9a3412' : '#57606a') + ';font-size:12px', f.label + (f.k in ov ? ' *' : ''));
+      var tag = el('div', 'flex:0 0 84px;color:' + (f.k in ov ? '#9a3412' : '#57606a') + ';font-size:12px',
+        f.label + (f.k in ov ? ' *' : ''));
       var inp = el('input', 'flex:1;min-width:0;padding:3px 6px;border:1px solid #d0d7de;border-radius:5px;font-size:12px');
       inp.value = prof[f.k] || '';
       inp.placeholder = '未填（可在这里补）';
@@ -415,42 +498,75 @@ _TEMPLATE = r"""// ==UserScript==
     });
   }
 
+  function buildDirSelect(host) {
+    var keys = Object.keys(PACKS);
+    if (!keys.length) return;
+    var wrap = el('div', 'display:flex;gap:6px;align-items:center;margin-bottom:6px');
+    wrap.appendChild(el('div', 'flex:0 0 84px;color:#57606a;font-size:12px', '岗位方向'));
+    dirSel = el('select', 'flex:1;padding:3px 6px;border:1px solid #d0d7de;border-radius:5px;font-size:12px');
+    keys.forEach(function (k) {
+      var o = document.createElement('option');
+      o.value = k; o.textContent = (PACKS[k] && PACKS[k].label) || k;
+      dirSel.appendChild(o);
+    });
+    dirSel.value = getDir();
+    dirSel.addEventListener('change', function () {
+      setDir(dirSel.value);
+      refreshList();
+      if (statusEl) {
+        statusEl.textContent = '已切到「' + ((PACKS[dirSel.value] || {}).label || dirSel.value) +
+          '」的自我评价 / 技能 / 亮点，直接点「填入空字段」即可。';
+      }
+    });
+    wrap.appendChild(dirSel);
+    host.appendChild(wrap);
+  }
+
   function doFill(mode) {
     var st = fillDoc(document, mode);
     broadcast(mode);
     if (statusEl) {
       statusEl.textContent = '已填 ' + st.filled + ' 个字段' +
-        (st.filled ? '：' + st.report.slice(0, 6).join('，') + (st.report.length > 6 ? ' …' : '') : '（没有匹配到可填字段）');
+        (st.filled ? '：' + st.report.slice(0, 6).join('，') + (st.report.length > 6 ? ' …' : '')
+                   : '（没有匹配到可填字段）');
     }
     setTimeout(function () {
       if (statusEl && st.filled === 0) {
-        statusEl.textContent += '。若页面在 iframe 里，稍等 1 秒；也可以试试先点一下表单区域再点填入。';
+        statusEl.textContent += '。若页面在 iframe 里，稍等 1~2 秒；也可以先点一下表单区域再点填入。';
       }
-    }, 1200);
+    }, 1300);
   }
 
   function buildPanel() {
-    panel = el('div', 'position:fixed;right:16px;bottom:16px;z-index:2147483647;width:344px;max-height:74vh;' +
+    panel = el('div', 'position:fixed;right:16px;bottom:16px;z-index:2147483647;width:352px;max-height:76vh;' +
       'overflow:auto;background:#fff;border:1px solid #d0d7de;border-radius:10px;' +
       'box-shadow:0 8px 28px rgba(0,0,0,.2);font:13px/1.55 -apple-system,"Microsoft YaHei",sans-serif;color:#1f2328');
     var head = el('div', 'display:flex;align-items:center;justify-content:space-between;padding:8px 10px;' +
       'border-bottom:1px solid #eaeef2;background:#f6f8fa;border-radius:10px 10px 0 0');
-    head.appendChild(el('b', 'font-size:13px', '📝 网申助手 v2'));
+    head.appendChild(el('b', 'font-size:13px', '📝 网申助手 v3'));
     var x = btn('收起', '', function () { panel.style.display = 'none'; if (fab) fab.style.display = 'block'; });
     head.appendChild(x);
     panel.appendChild(head);
 
     var body = el('div', 'padding:9px 10px');
+    buildDirSelect(body);
+
     var bar = el('div', 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px');
     bar.appendChild(btn('填入空字段', 'background:#1f6feb;color:#fff;border-color:#1f6feb', function () { doFill('empty'); }));
     bar.appendChild(btn('覆盖全部', '', function () { doFill('overwrite'); }));
-    bar.appendChild(btn('💾 记住修改', '', function () {
-      if (statusEl) statusEl.textContent = '已记住（存在本机浏览器里，换网站也生效）';
+    bar.appendChild(btn('恢复内置', '', function () {
+      clearOverrides(); refreshList();
+      if (statusEl) statusEl.textContent = '已清空本机手动修改，回到内置资料。';
     }));
-    bar.appendChild(btn('恢复内置', '', function () { clearOverrides(); refreshList(); if (statusEl) statusEl.textContent = '已恢复 data/profile.json 里的资料'; }));
+    bar.appendChild(btn('📋 导出资料', '', function () {
+      var s = JSON.stringify(P(), null, 2);
+      try { if (navigator.clipboard) navigator.clipboard.writeText(s); } catch (e) {}
+      if (statusEl) statusEl.textContent = '资料 JSON 已复制到剪贴板（可粘到投递工作台的「从 JSON 导入」）。';
+    }));
     body.appendChild(bar);
 
-    statusEl = el('div', 'color:#57606a;font-size:12px;margin-bottom:6px', '资料改完直接点「填入空字段」。带 * 的是你在这里改过的值。');
+    statusEl = el('div', 'color:#57606a;font-size:12px;margin-bottom:6px',
+      '先选「岗位方向」，再点「填入空字段」。带 * 的是你在这里改过的值。');
     body.appendChild(statusEl);
 
     listEl = el('div');
@@ -482,29 +598,37 @@ _TEMPLATE = r"""// ==UserScript==
 
   if (isTop) {
     ensureMounted();
-        setInterval(ensureMounted, 2500);  /* SPA/前端框架会重渲染 body */
+    setInterval(ensureMounted, 2500);  /* SPA/前端框架会重渲染 body */
   }
 
   // 调试/自测入口（沙箱模式下写 window 可能被拒，忽略即可）
-  try {
-    window.__IHUB_AUTOFILL__ = {
-      labelOf: labelOf, bestField: bestField, fillDoc: fillDoc, adapt: adapt,
-      fillSelect: fillSelect, FIELDS: FIELDS, profile: P, setOverride: setOverride,
-      getOverrides: readOverrides, clearOverrides: clearOverrides, buildPanel: buildPanel,
-    };
-  } catch (e) {}
+  var API = {
+    labelOf: labelOf, bestField: bestField, fillDoc: fillDoc, adapt: adapt,
+    fillSelect: fillSelect, FIELDS: FIELDS, profile: P, setOverride: setOverride,
+    getOverrides: readOverrides, overrides: readOverrides, clearOverrides: clearOverrides,
+    getDir: getDir, setDir: setDir, PACKS: PACKS, groupLabel: groupLabel,
+    isVisible: isVisible, buildPanel: buildPanel,
+  };
+  try { window.__IHUB_AUTOFILL__ = API; } catch (e) {}
+  try { window.__LGR_AUTOFILL__ = API; } catch (e) {}
 })();
 """
 
 
 def build_js(prof=None) -> str:
     prof = prof or profile_mod.load()
-    data = {}
-    for k in KEYS:
-        v = prof.get(k, "")
-        data[k] = v if v not in (None, "") else ""
+    data = {k: (prof.get(k) or "") for k in KEYS}
+    # resume_kit 里更权威的字段（学院、GPA 等）补进来，但仍以「我的资料」为准
+    if _tailor is not None:
+        try:
+            for k, v in _tailor.base_fields().items():
+                if not data.get(k):
+                    data[k] = v
+        except Exception:
+            pass
     payload = json.dumps(data, ensure_ascii=False, indent=2)
-    return _TEMPLATE.replace("__PAYLOAD__", payload)
+    pks = json.dumps(_packs(), ensure_ascii=False, indent=2)
+    return _TEMPLATE.replace("__PAYLOAD__", payload).replace("__PACKS__", pks)
 
 
 def _atomic_write(path: str, content: str) -> None:
@@ -522,7 +646,6 @@ def save_userscript(path: str = None, prof=None) -> str:
     return path
 
 
-BOOKMARK_NAME = "网申书签.txt"
 _BOOKMARK_HEAD = "javascript:"
 _BOOKMARK_TAIL = "go();})()"
 
@@ -560,8 +683,7 @@ def build_bookmarklet(prof=None) -> str:
     cut = body.find(sentinel)
     if cut < 0:
         raise RuntimeError("网申脚本缺少 __BOOKMARK_CUT__ 哨兵，无法生成书签版")
-    body = body[:cut]
-    body = _minify(body)
+    body = _minify(body[:cut])
     for i in range(len(body) - 1):
         if body[i:i + 2] == "//" and (i == 0 or body[i - 1] != ":"):
             raise RuntimeError(
