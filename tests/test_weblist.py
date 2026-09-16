@@ -3,6 +3,7 @@
 
 运行：venv\\Scripts\\python.exe tests\\test_weblist.py
 """
+import glob
 import os
 import sys
 
@@ -87,6 +88,20 @@ check("official==link 的不冒充官方入口",
       "官方投递：—" in _txt and _txt.count("官方投递：https") == 1, _txt.count("官方投递：https"))
 check("统计了缺失条数", "1 条没有官方入口" in _txt)
 check("空输入不炸", apply_links_text([]).startswith("投递入口清单"))
+
+print("[6] 项目里的 .bat 必须是 CRLF 换行")
+import glob                                                    # noqa: E402
+_bats = sorted(glob.glob(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                      "*.bat")))
+check("项目根至少有 3 个 bat", len(_bats) >= 3, [os.path.basename(b) for b in _bats])
+for _b in _bats:
+    with open(_b, "rb") as _f:
+        _raw = _f.read()
+    _crlf = _raw.count(b"\r\n")
+    _bare = _raw.count(b"\n") - _crlf
+    check(f"{os.path.basename(_b)} 全部是 CRLF（无裸 LF）", _bare == 0, f"裸LF={_bare}")
+    check(f"{os.path.basename(_b)} 以 @echo off 开头", _raw.startswith(b"@echo off"),
+          _raw[:20])
 
 print(f"\n结果: {P} 通过, {F} 失败")
 sys.exit(1 if F else 0)

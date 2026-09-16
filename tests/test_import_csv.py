@@ -154,6 +154,37 @@ def main() -> int:
               and rf["link"] == "https://yn.tobacco.gov.cn/",
               rf and dict(rf))
 
+        print("[5c] 飞书里只框选数据行（没表头）—— 第一行不能丢")
+        nohead = ("1\t云南中烟工业有限责任公司\t数字化产线运维工程师\t昆明\t2026/11/28\t"
+                  "https://www.ynzy-tobacco.com/\t本科\r\n"
+                  "2\t大理州烟草专卖局（公司）\t信息系统管理岗\t大理\t2026/12/05\t"
+                  "https://yn.tobacco.gov.cn/\t本科\r\n")
+        resN = importer.import_csv_text(nohead, source="飞书无表头")
+        check("两条都导入了（第一行没被当表头吃掉）", resN["rows"] == 2, resN["rows"])
+        check("按内容猜出了列", len(resN["mapping"]) >= 5, resN["mapping"])
+        check("明确提示了「没识别到表头，已按内容猜列」",
+              any("没识别到表头" in w for w in resN["warnings"]), resN["warnings"])
+        rn = conn.execute("SELECT * FROM jobs WHERE source='飞书无表头' AND city='大理'").fetchone()
+        check("猜列结果正确（岗位/公司/城市/截止/链接）",
+              rn and rn["title"] == "信息系统管理岗" and rn["company"] == "大理州烟草专卖局（公司）"
+              and rn["deadline"] == "2026/12/05" and rn["link"] == "https://yn.tobacco.gov.cn/",
+              rn and dict(rn))
+
+        print("[5d] 单元格内换行（飞书多行文本）与超链接字段的坑")
+        multi = ('岗位\t公司\t城市\t链接\t岗位职责\r\n'
+                 '"设备管理岗"\t"云南中烟"\t"昆明"\t"https://a.com/1"\t'
+                 '"1. 负责产线设备维护\n2. 参与技术改造"\r\n')
+        resM = importer.import_csv_text(multi, source="飞书多行")
+        rm = conn.execute("SELECT * FROM jobs WHERE source='飞书多行'").fetchone()
+        check("带换行的单元格不串行（仍是 1 条）", resM["rows"] == 1, resM["rows"])
+        check("多行描述完整保留", rm and "参与技术改造" in (rm["description"] or ""),
+              rm and rm["description"])
+
+        badlink = "岗位\t公司\t链接\r\n数据分析师\t云南机场集团\t点击查看\r\n"
+        resB = importer.import_csv_text(badlink, source="飞书坏链接")
+        check("链接列不是网址时会给出提醒",
+              any("不是网址" in w for w in resB["warnings"]), resB["warnings"])
+
         print("[6] 制表符里带引号注释、以及分号分隔的导出")
         semi = "岗位;公司;城市\n数据采集工程师;某科技公司;昆明\n"
         res6 = importer.import_csv_text(semi, source="分号表")

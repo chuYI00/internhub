@@ -95,6 +95,68 @@ def _first_line(text: str) -> str:
     return ""
 
 
+# 无表头时的内容猜测用得到
+_CITY_WORDS = {"昆明", "大理", "云南", "曲靖", "玉溪", "红河", "楚雄", "昭通", "丽江", "普洱",
+               "保山", "临沧", "文山", "西双版纳", "迪庆", "怒江", "德宏",
+               "北京", "上海", "广州", "深圳", "成都", "重庆", "杭州", "武汉", "西安", "南京"}
+_DEGREE_WORDS = {"本科", "硕士", "博士", "大专", "专科", "不限", "高中", "本科及以上", "硕士研究生"}
+_COMPANY_HINT = re.compile(r"(公司|集团|局|厂|中心|银行|研究院|研究所|大学|学院|医院|机场|电网|烟草)")
+_URL_RE = re.compile(r"^https?://\S+$", re.I)
+_DATE_CELL_RE = re.compile(r"20\d{2}[-/.年]\d{1,2}([-/.月]\d{1,2})?日?$")
+
+
+def _norm_cell(s) -> str:
+    """单元格归一化：飞书/Excel 复制出来的常带全角空格、不间断空格、零宽字符。"""
+    return (str(s or "")
+            .replace("\u3000", " ").replace("\xa0", " ").replace("\u200b", "")
+            .strip())
+
+
+def _guess_by_content(row) -> dict:
+    """**没有表头时**按单元格内容猜列（飞书里只选中数据行复制，就会没有表头）。
+
+    猜法：网址 → 链接；日期格式 → 截止；城市名 → 城市；学历词 → 学历；
+    含「公司/集团/局/厂/中心…」→ 公司；剩下第一个够长的文本 → 岗位名。
+    """
+    mp = {}
+    for i, c in enumerate(row):
+        c = _norm_cell(c)
+        if not c:
+            continue
+        if "link" not in mp and _URL_RE.match(c):
+            mp["link"] = i
+        elif "deadline" not in mp and _DATE_CELL_RE.match(c):
+            mp["deadline"] = i
+        elif "city" not in mp and c in _CITY_WORDS:
+            mp["city"] = i
+        elif "degree" not in mp and c in _DEGREE_WORDS:
+            mp["degree"] = i
+        elif "company" not in mp and _COMPANY_HINT.search(c):
+            mp["company"] = i
+    for i, c in enumerate(row):
+        if i in mp.values():
+            continue
+        if len(_norm_cell(c)) >= 3:
+            mp["title"] = i
+            break
+    return mp
+
+
+def _looks_like_header(row) -> bool:
+    """这一行看起来是表头吗？——识别出 ≥2 个字段，或本身就是已知列名。"""
+    mp = _detect(row)
+    if len(mp) >= 2:
+        return True
+    for c in row:
+        c = _norm_cell(c)
+        if not c or len(c) > 8:
+            continue
+        for aliases in HEADER_ALIAS.values():
+            if c in [a.lower() for a in aliases]:
+                return True
+    return False
+
+
 def _sniff_delimiter(text: str) -> str:
     """自动认分隔符：逗号 CSV / 制表符 TSV（从 Excel、飞书表格复制粘贴就是 TSV）/ 分号。
 
@@ -128,19 +190,32 @@ def import_csv_text(text: str, source: str = "CSV导入") -> dict:
         return dict(empty)
     mp = _detect(rows[0])
     warnings = []
+    data_start = 1
+    no_header = False
+    if not _looks_like_header(rows[0]):
+        # 没复制表头（飞书里只框选了数据行）→ 第一行也是数据，按内容猜列，别把它吃掉
+        guessed = _guess_by_content(rows[0])
+        if guessed:
+            mp = guessed
+            data_start = 0
+            no_header = True
+            warnings.append("没识别到表头，已按内容自动猜列（"
+                            + "、".join(f"{k}={str(rows[0][v]).strip()[:12]}"
+                                       for k, v in sorted(mp.items(), key=lambda x: x[1]))
+                            + "）；第一行也按数据导入了")
     if "title" not in mp:
         # 兜底：没识别出"岗位"列就用第一列，总比整份文件丢掉强
         mp["title"] = 0
         warnings.append(
             f"未识别到岗位列，已用第一列「{str(rows[0][0]).strip()}」当岗位名")
     jobs = []
-    for row in rows[1:]:
+    for row in rows[data_start:]:
         if not row or not any(str(c).strip() for c in row):
             continue
 
         def g(field):
             i = mp.get(field)
-            return str(row[i]).strip() if (i is not None and i < len(row)) else ""
+            return _norm_cell(row[i]) if (i is not None and i < len(row)) else ""
 
         title = g("title")
         if not title:
@@ -167,6 +242,10 @@ def import_csv_text(text: str, source: str = "CSV导入") -> dict:
             "batch": g("batch"),
             "official_url": link,
         })
+    # 链接列有值但不是网址 → 多半是飞书「超链接」字段复制出来变成了显示文字
+    if jobs and "link" in mp and not any(str(j["link"]).lower().startswith("http") for j in jobs):
+        warnings.append("链接列有内容但不是网址（飞书/钉钉的「超链接」字段复制出来常是显示文字），"
+                        "可回到表格里点开该列改成「URL」字段类型再复制")
     res = db.upsert_jobs(jobs)
     if not jobs and warnings:
         res = {**res, "warnings": warnings}

@@ -187,6 +187,30 @@ def main():
 
     # ============ 岗位列表 ============
     with tab1:
+        with st.expander("📥 导入我自己找的岗位表（飞书/Excel 复制粘贴就行，不需要导出权限）", expanded=False):
+            st.caption("在飞书多维表格 / Excel / WPS 里 **框选表格区域 → Ctrl+C → 粘到下面**，点导入即可。"
+                       "**只复制数据行、没有表头也能用** —— 会自动按内容猜列（网址→链接、城市名→城市、"
+                       "日期→截止），第一行不会被丢掉。")
+            _paste1 = st.text_area("把表格内容粘到这里（有表头更好）", height=140, key="paste_tab1",
+                                   placeholder="岗位名称\t公司\t工作城市\t投递链接\n数据分析工程师\t云南机场集团\t昆明\thttps://...")
+            _pc1, _pc2 = st.columns([1, 3])
+            if _pc1.button("📥 导入粘贴的内容", type="primary", key="paste_btn_tab1"):
+                if not (_paste1 or "").strip():
+                    st.warning("先粘贴表格内容再点导入。")
+                else:
+                    from ihub import importer as _imp3
+                    stt3 = _imp3.import_csv_text(_paste1, source="飞书粘贴")
+                    for _w in stt3.get("warnings") or []:
+                        st.info("提醒：" + _w)
+                    if stt3["rows"]:
+                        st.success(f"已导入 {stt3['rows']} 行 → 新增 {stt3['inserted']} / "
+                                   f"更新 {stt3['updated']}（识别到的列：{'、'.join(stt3['mapping'].keys())}）")
+                        st.rerun()
+                    else:
+                        st.warning("没解析出数据行，确认内容是「一行一条」的表格。")
+            _pc2.caption("💡 更省事：双击项目里的 **从剪贴板导入.bat** —— 复制完直接双击，连粘贴都省了。"
+                         "（飞书表格禁用了导出权限也不影响，走的不是导出）")
+
         city_arg = None if f_city == "全部" else f_city
         df = load_df(city_arg, f_keyword or None, active_only, fake_only, fav_only,
                      unexpired, since_days, job_type=job_type)
