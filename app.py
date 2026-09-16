@@ -68,16 +68,48 @@ def gen_resume_for(job, jd_text=None):
     return resume.build_docx(job, path, jd_text=jd_text)
 
 
-def _download_file(path, label, mime):
-    """存在才显示下载按钮；不存在就提示怎么生成。"""
+def _applied_index():
+    """已投（进度不是"未投"）的记录 → {(公司, 岗位): [记录]}，用于重复投递检查。"""
+    idx = {}
+    try:
+        for r in db.app_list(limit=2000):
+            if (r.get("stage") or "未投") == "未投":
+                continue
+            key = (str(r.get("company") or "").strip(), str(r.get("title") or "").strip())
+            idx.setdefault(key, []).append(r)
+    except Exception:
+        pass
+    return idx
+
+
+def _dup_hits(company, title, idx=None):
+    """这条岗位我是不是已经投过了？（同名公司 + 岗位名互相包含即算命中）"""
+    idx = idx if idx is not None else _applied_index()
+    c, t = str(company or "").strip(), str(title or "").strip()
+    hits = []
+    for (kc, kt), rows in idx.items():
+        if not kc:
+            continue
+        same_co = (kc == c) or (c and (kc in c or c in kc))
+        if not same_co:
+            continue
+        same_jt = (not kt) or (not t) or (kt == t) or (kt in t) or (t in kt)
+        if same_jt:
+            hits += rows
+    return hits
+
+
+def _download_file(path, label, mime, container=None):
+    """存在才显示下载按钮；不存在就提示怎么生成。container 可传 st.columns 里的某一列。"""
+    box = container if container is not None else st
     if not os.path.exists(path):
-        st.button(label + "（未生成）", disabled=True, key="miss_" + os.path.basename(path))
-        st.caption("先跑一次：`venv\\Scripts\\python.exe gen_resume_kit.py`")
+        box.button(label + "（未生成）", disabled=True, key="miss_" + os.path.basename(path))
+        box.caption("先跑一次：`venv\\Scripts\\python.exe gen_resume_kit.py`")
         return
     with open(path, "rb") as f:
         data = f.read()
-    st.download_button(label, data=data, file_name=os.path.basename(path), mime=mime,
-                       key="dl_" + os.path.basename(path))
+    box.download_button(label, data=data, file_name=os.path.basename(path), mime=mime,
+                        key="dl_" + os.path.basename(path))
 
 
 def main():
@@ -147,9 +179,9 @@ def main():
         st.warning(f"已标记 {s['fake']} 条疑似风险岗位，可在侧边栏勾选“只看风险标记”核对。")
 
     (tab1, tab2, tab3, tab4, tab5, tab6,
-     tab7, tab8, tab9, tab10) = st.tabs(
+     tab7, tab8, tab9, tab10, tab11) = st.tabs(
         ["岗位列表", "🏆 为你推荐", "🎯 投递工作台", "我的收藏", "👤 我的资料", "📮 网申跟踪",
-         "🛰 秋招渠道", "📚 备考方案", "📝 简历定制", "说明与合规"])
+         "🛰 秋招渠道", "📚 备考方案", "📝 简历定制", "🌏 云南秋招", "说明与合规"])
 
     # ============ 岗位列表 ============
     with tab1:
@@ -288,6 +320,12 @@ def main():
                     if job.get("official_url"):
                         line += f"\n\n企业官网招聘：{job['official_url']}（投递前建议先到官网核验）"
                     st.markdown(line)
+                    _hits = _dup_hits(job.get("company"), job.get("title"))
+                    if _hits:
+                        st.warning("⚠️ 你**已经投过**同岗位："
+                                   + "、".join(f'{h.get("company")}｜{h.get("title")}（{h.get("stage")}，'
+                                               f'{h.get("applied_at") or "日期未记"}）' for h in _hits[:3])
+                                   + "　—— 别重复投，尤其是烟草按批次限报。")
                     from ihub import resume
                     note = job.get("apply_note") or resume.apply_message(job)
                     edited = st.text_area("投递理由/开场白（可改）", value=note,
@@ -454,6 +492,28 @@ def main():
         for i, s in enumerate(db.STAGES):
             c[i].metric(s, stt.get(s, 0))
 
+        # ---- 重复投递检查（烟草等"同批次只能报一个岗"的单位，重复投=直接取消资格）----
+        _idx = _applied_index()
+        _dups = {k: v for k, v in _idx.items() if len(v) > 1}
+        _job_dups = []
+        for _j in db.query(apply_state=1, active_only=False, limit=500):
+            _h = _dup_hits(_j.get("company"), _j.get("title"), _idx)
+            if _h:
+                _job_dups.append((_j, _h))
+        if _dups or _job_dups:
+            st.error(f"⚠️ 发现 {len(_dups) + len(_job_dups)} 处疑似重复投递 —— "
+                     "烟草明确「同一批次只能报 1 个单位 1 个岗位，重复投递取消资格」，投前务必核对。")
+            with st.expander("查看重复明细", expanded=True):
+                for (kc, kt), rows in _dups.items():
+                    st.markdown(f'**{kc}｜{kt}**　→ 已有 {len(rows)} 条记录（进度：'
+                                + "、".join(str(r.get("stage")) for r in rows) + "）")
+                for _j, _h in _job_dups:
+                    st.markdown(f'**投递箱里的「{_j.get("company")}｜{_j.get("title")}」**　→ 你已投过：'
+                                + "、".join(f'{r.get("company")}｜{r.get("title")}（{r.get("stage")}）'
+                                            for r in _h[:3]))
+        else:
+            st.caption("✅ 没有发现重复投递。每次投完记得把这里的「进度」改成「已投」。")
+
         with st.expander("➕ 手动添加一条（官网/公众号看到的岗位）"):
             with st.form("add_app", clear_on_submit=True):
                 a1, a2, a3 = st.columns(3)
@@ -568,6 +628,25 @@ def main():
 
     # ============ 📚 备考方案 ============
     with tab8:
+        # ---- 成品方案：云南烟草备考作战方案（完整版，可直接打印）----
+        _plan_md = os.path.join(ROOT_APP, "备考冲刺资料", "云南烟草2027届备考作战方案.md")
+        _plan_docx = os.path.join(ROOT_APP, "备考冲刺资料", "云南烟草2027届备考作战方案.docx")
+        if os.path.exists(_plan_md):
+            with st.expander("🍃 云南烟草 2027 届 · 备考作战方案（完整版，先看这个）", expanded=True):
+                st.caption("两家招录主体的差异与「报哪个更划算」　|　2027 届时间轴（含网申窗口）　|　"
+                           "分值目标与战略放弃　|　行测五模块策略　|　专业科目（按你的专业定向）　|　"
+                           "公基必背清单　|　9.17 起逐日作战表　|　网申材料与避坑（重复投递=取消资格）　|　"
+                           "面试题库 + STAR 故事　|　题库与网课清单")
+                _pc1, _pc2 = st.columns(2)
+                _download_file(_plan_docx, "⬇ 下载 Word（.docx，可打印）",
+                               "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                               container=_pc1)
+                _download_file(_plan_md, "⬇ 下载 Markdown（.md）", "text/markdown",
+                               container=_pc2)
+                with st.container(height=430):
+                    st.markdown(open(_plan_md, encoding="utf-8").read())
+            st.divider()
+
         st.markdown("#### 📚 备考方案（选目标岗位 → 自动出方案）")
         from ihub import study
         tname = st.selectbox("我要备考的目标", list(study.TARGETS.keys()), key="study_target")
@@ -654,7 +733,7 @@ def main():
                     st.warning("没解析出数据行：确认第一行是表头（列名如 岗位/公司/城市/链接），后面每行一条。")
 
     # ============ 简历定制（粘贴 JD → 定向简历 + 网申文案） ============
-    with tab10:
+    with tab9:
         from ihub import tailor as _tk
         st.markdown("#### 📝 简历定制与网申文案")
         st.caption("粘贴岗位 JD → 自动识别岗位方向 → 生成对应侧重的简历（docx / pdf）"
@@ -739,10 +818,12 @@ def main():
             if _made and _made.get("key") == _key:
                 st.success(f"已生成：{os.path.relpath(_made['docx'], ROOT_APP)}")
                 _d1, _d2 = st.columns(2)
-                _download_file(_d1, _made["docx"], "⬇ 下载 Word（.docx）",
-                               "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                _download_file(_made["docx"], "⬇ 下载 Word（.docx）",
+                               "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                               container=_d1)
                 if _made.get("pdf"):
-                    _download_file(_d2, _made["pdf"], "⬇ 下载 PDF（上传网申用）", "application/pdf")
+                    _download_file(_made["pdf"], "⬇ 下载 PDF（上传网申用）", "application/pdf",
+                                   container=_d2)
             else:
                 st.caption("生成的文件会放到 投递文件/ 文件夹，同时在这里给出下载按钮。")
 
@@ -765,9 +846,79 @@ def main():
                                file_name=f"网申文案_{_tk.file_of(_key)}.txt", mime="text/plain",
                                key="tk_dl_all")
 
+    # ============ 🌏 云南秋招（昆明 / 大理 投递渠道地图） ============
+    with tab10:
+        from ihub import yunnan as yn
+
+        st.markdown("#### 🌏 云南秋招投递渠道地图（昆明 / 大理）")
+        st.caption("通用平台抓不到的（要登录、动态渲染、只走公众号）这里用「渠道地图」兜住："
+                   "每个单位一条，给官方公告页 / 网申入口 / 搜索直达。链接会变，但「去哪找」不会变。")
+        st.info("**你的定位**：2027 届 · 昆明 + 大理 · 央国企为主 · 不限企业类型 · 重点备考烟草。"
+                "下面按「与你专业的契合度」排了序，★★★★ 以上的就是最该投的。")
+
+        y1, y2, y3 = st.columns([1, 1, 2])
+        with y1:
+            st.download_button("⬇ 导出渠道地图（txt）", data=yn.as_text().encode("utf-8"),
+                               file_name="云南秋招投递渠道地图.txt", mime="text/plain",
+                               key="yn_dl")
+        with y2:
+            if st.button("📋 复制全部到剪贴板提示", key="yn_copy"):
+                st.success("已生成，点上面的 txt 下载即可（手机备忘录也能看）")
+        with y3:
+            st.caption("标「官方直达」的是核对过的；其余给搜索直达 —— 永远不会 404。")
+
+        st.divider()
+        st.markdown("##### 🎯 先看这些（★★★☆ 以上，按契合度排序）")
+        for u in yn.for_me():
+            with st.expander(f'{u["heat"]}　{u["name"]}　—　{u["fit"][:34]}…'):
+                cols = st.columns([3, 1])
+                with cols[0]:
+                    if u.get("portal"):
+                        st.markdown(f'**官方公告**：{u["portal"]}')
+                    if u.get("apply"):
+                        st.markdown(f'**网申入口**：{u["apply"]}')
+                    if u.get("apply_note"):
+                        st.caption("说明：" + u["apply_note"])
+                    st.markdown(f'**搜索直达**：{u["search"]}')
+                    st.markdown(f'**对口岗位**：{u["fit"]}')
+                    st.markdown(f'**招聘节奏**：{u["rhythm"]}')
+                    st.warning(u["tips"])
+                with cols[1]:
+                    if st.button("➕ 记进网申跟踪", key="yn_add_" + str(abs(hash(u["name"])) % 10 ** 8)):
+                        db.app_add(company=u["name"], title="（岗位待定，公告发布后填）",
+                                   city="昆明/大理", url=u.get("apply") or u.get("portal") or u["search"],
+                                   job_type="秋招", deadline="", note=u["fit"])
+                        st.success("已加入「📮 网申跟踪」")
+                        st.rerun()
+
+        st.divider()
+        st.markdown("##### 📚 全部单位（按类别）")
+        for cat, items in yn.cats_in_order():
+            with st.expander(f"{cat}（{len(items)} 家）", expanded=False):
+                for u in items:
+                    st.markdown(f'**{u["heat"]}　{u["name"]}**')
+                    bits = []
+                    if u.get("portal"):
+                        bits.append(f'[官方公告]({u["portal"]})')
+                    if u.get("apply"):
+                        bits.append(f'[网申入口]({u["apply"]})')
+                    bits.append(f'[搜索直达]({u["search"]})')
+                    st.markdown("　|　".join(bits))
+                    st.caption(f'对口：{u["fit"]}　·　节奏：{u["rhythm"]}')
+                    st.caption("💡 " + u["tips"])
+                    st.markdown("")
+
+        st.divider()
+        st.markdown("##### 🗓 每周固定动作（照做就不漏公告）")
+        wdf = pd.DataFrame(yn.WEEKLY, columns=["时间", "动作", "入口"])
+        st.dataframe(wdf, hide_index=True, width="stretch",
+                     column_config={"入口": st.column_config.LinkColumn("入口")})
+        st.caption("⚠️ 烟草「同一批次只能报 1 个单位 1 个岗位，重复投递取消资格」——"
+                   "投之前先在「📮 网申跟踪」记一笔，投完立刻改状态。")
+
     # ============ 说明 ============
 
-    with tab9:
+    with tab11:
         st.markdown("#### 使用说明")
         st.markdown(
             "1. 抓取 → 筛选 → 勾选 🎯投递箱 → 保存；\n"

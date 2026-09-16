@@ -94,24 +94,50 @@ def gen_docs():
     return made
 
 
+def gen_study_docs():
+    """把 备考冲刺资料/*.md 转成 docx（考公/考烟草的成品资料，方便打印）。"""
+    folder = os.path.join(ROOT, "备考冲刺资料")
+    made = []
+    if not os.path.isdir(folder):
+        return made
+    for fn in sorted(os.listdir(folder)):
+        if not fn.endswith(".md"):
+            continue
+        src = os.path.join(folder, fn)
+        dst = os.path.join(folder, fn[:-3] + ".docx")
+        try:
+            md2docx.build(src, dst)
+            made.append(dst)
+        except Exception as e:
+            _log(f"  ! {fn} → docx 失败：{e}")
+    return made
+
+
 def main() -> int:
     os.makedirs(CV, exist_ok=True)
     os.makedirs(SRC, exist_ok=True)
 
-    _log("[1/5] 生成简历（万能通用版 + 8 个岗位方向）…")
+    _log("[1/6] 生成简历（万能通用版 + 8 个岗位方向）…")
     files = gen_resumes()
     for f in files:
         _log(f"      {os.path.getsize(f):>8}  {os.path.relpath(f, ROOT)}")
 
-    _log("[2/5] 生成投递工作台网页…")
+    _log("[2/6] 生成投递工作台网页…")
     _log("      " + os.path.relpath(gen_workbench(), ROOT))
-    _log("[3/5] 生成网申速填卡…")
+    _log("[3/6] 生成网申速填卡…")
     _log("      " + os.path.relpath(gen_quickcard(), ROOT))
-    _log("[4/5] 生成资料库 JSON…")
+    _log("[4/6] 生成资料库 JSON…")
     _log("      " + os.path.relpath(gen_library(), ROOT))
-    _log("[5/5] 生成诊断报告 / 使用说明…")
+    _log("[5/6] 生成诊断报告 / 使用说明…")
     for f in gen_docs():
         _log("      " + os.path.relpath(f, ROOT))
+
+    _log("[6/6] 生成备考资料 docx（备考冲刺资料/）…")
+    _sd = gen_study_docs()
+    for f in _sd:
+        _log("      " + os.path.relpath(f, ROOT))
+    if not _sd:
+        _log("      (没找到 .md，跳过)")
 
     _log("\n完成。网申助手脚本请跑：venv\\Scripts\\python.exe -m ihub.autofill")
     _log("全部材料在：" + OUT)

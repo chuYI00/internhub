@@ -134,7 +134,7 @@ def main() -> int:
     at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
     at.run()
     check("app 无异常", not at.exception, [e.value for e in at.exception])
-    check("有 10 个页签", len(at.tabs) == 10, len(at.tabs))
+    check("有 11 个页签", len(at.tabs) == 11, len(at.tabs))
 
     at.text_area(key="tk_jd").set_value(JD_EMBED)
     at.text_input(key="tk_jt").set_value("嵌入式软件开发工程师")
@@ -149,6 +149,30 @@ def main() -> int:
     codes = [c.value for c in at.code]
     check("网申文案块已渲染（含学院）", any("电子信息与自动化学院" in c for c in codes), len(codes))
     check("文案块数量够（≥15）", len(codes) >= 15, len(codes))
+
+    print("[9] 云南秋招情报库")
+    from ihub import yunnan as yn
+    units = yn.all_units()
+    check("单位数量合理（≥20）", len(units) >= 20, len(units))
+    check("分 8 个类别", len(yn.cats_in_order()) == 8, len(yn.cats_in_order()))
+    check("烟草排在第一类", "烟草" in yn.cats_in_order()[0][0], yn.cats_in_order()[0][0])
+    names = " ".join(u["name"] for u in units)
+    for kw in ("烟草专卖局", "云南中烟", "南方电网", "云南航空产业投资"):
+        check(f"含关键单位「{kw}」", kw in names)
+    check("每条都有 对口岗位/节奏/提醒",
+          all(u.get("fit") and u.get("rhythm") and u.get("tips") for u in units))
+    check("每条都至少有一个可用入口（官网或搜索直达）",
+          all(u.get("portal") or u.get("apply") or u.get("search") for u in units))
+    check("高契合单位 ≥10 家", len(yn.for_me()) >= 10, len(yn.for_me()))
+    txt = yn.as_text()
+    check("导出文本含烟草官网", "tobacco.gov.cn" in txt)
+    check("导出文本含每周动作", "每周固定动作" in txt)
+    check("烟草那条写明了「重复投递取消资格」",
+          any("取消资格" in u["tips"] for u in units if "烟草" in u["name"]))
+    check("链接都是 http(s)", all(
+        (u.get("portal","").startswith("http") or not u.get("portal")) and
+        (u.get("apply","").startswith("http") or not u.get("apply")) and
+        u["search"].startswith("http") for u in units))
 
     print(f"\n结果: {PASS} 通过, {FAIL} 失败")
     return 1 if FAIL else 0
