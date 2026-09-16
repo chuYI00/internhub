@@ -115,6 +115,30 @@ def main() -> int:
         check("给出告警提示用了第一列", bool(res4.get("warnings")), res4.get("warnings"))
         row2 = conn.execute("SELECT * FROM jobs WHERE source='认不出表头'").fetchone()
         check("兜底用第一列当岗位名", row2 and row2["title"] == "1", row2 and row2["title"])
+
+        print("[5] 从飞书/Excel 复制粘贴（制表符 TSV），无需导出权限")
+        tsv = ("岗位名称\t公司\t工作城市\t学历\t投递链接\t截止日期\n"
+               "机场信息化工程师\t云南机场集团\t大理\t本科\thttps://t.com/1\t2026-11-30\n"
+               "数据运营专员\t云南航产投\t昆明\t硕士\thttps://t.com/2\t2026-12-10\n"
+               "新媒体内容岗\t云南中烟\t昆明\t本科\thttps://t.com/3\t2026-11-20\n")
+        res5 = importer.import_csv_text(tsv, source="粘贴导入")
+        check("自动认出制表符分隔", res5.get("delimiter") == "\t", res5.get("delimiter"))
+        check("导入 3 行", res5["rows"] == 3, res5["rows"])
+        n5 = conn.execute("SELECT COUNT(*) FROM jobs WHERE source='粘贴导入'").fetchone()[0]
+        check("库里 3 条", n5 == 3, n5)
+        r5 = conn.execute("SELECT * FROM jobs WHERE source='粘贴导入' AND city='大理'").fetchone()
+        check("字段对齐正确（大理/本科/链接）",
+              r5 and r5["title"] == "机场信息化工程师" and r5["degree"] == "本科"
+              and r5["link"] == "https://t.com/1" and r5["deadline"] == "2026-11-30",
+              r5 and dict(r5))
+
+        print("[6] 制表符里带引号注释、以及分号分隔的导出")
+        semi = "岗位;公司;城市\n数据采集工程师;某科技公司;昆明\n"
+        res6 = importer.import_csv_text(semi, source="分号表")
+        check("分号分隔也能认", res6.get("delimiter") == ";" and res6["rows"] == 1, res6)
+
+        res7 = importer.import_csv_text("", source="空")
+        check("空文本不报错", res7["rows"] == 0 and res7.get("warnings") == [], res7)
         conn.close()
 
     print(f"\n结果: {PASS} 通过, {FAIL} 失败")

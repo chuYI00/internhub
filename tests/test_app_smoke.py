@@ -74,7 +74,12 @@ def main() -> int:
         csv_head = exp.to_csv(index=False).splitlines()[0]
         check("导出内容可生成 CSV 表头", len(csv_head) > 5, csv_head[:60])
 
-    print("[3] 侧边栏能渲染筛选控件")
+    print("[3] 没有导出权限时的『粘贴导入』入口")
+    ta_keys = [t.key for t in at.text_area]
+    check("有粘贴表格的输入框", "paste_tbl" in ta_keys, ta_keys)
+    check("有『导入粘贴的内容』按钮", "paste_import" in keys, keys[:25])
+
+    print("[4] 侧边栏能渲染筛选控件")
     check("快速锁定城市 radio 存在",
           any("潍坊" in str(r.options) for r in at.radio), [str(r.options)[:40] for r in at.radio])
 

@@ -594,6 +594,28 @@ def main():
             else:
                 st.warning("没识别到「岗位」列：请确认表头含“岗位/职位/岗位名称”等列名（第一列会被兜底当作岗位名）")
 
+        st.markdown("**📋 直接粘贴导入（没导出权限时用这个）**")
+        st.caption("在飞书多维表格 / Excel / WPS 里**选中表格区域 → Ctrl+C → 粘到下面 → 点导入**。"
+                   "复制出来的是制表符分隔，同样能自动认列名。（飞书表格若禁用了导出，这招照样能用）")
+        paste = st.text_area(
+            "把表格内容粘到这里（含表头那一行）", height=170, key="paste_tbl",
+            placeholder="岗位名称\t公司\t工作城市\t投递链接\n数据分析工程师\t云南机场集团\t昆明\thttps://...")
+        if st.button("📥 导入粘贴的内容", key="paste_import"):
+            if not paste or not paste.strip():
+                st.warning("先粘贴表格内容再点导入。")
+            else:
+                from ihub import importer as _imp2
+                stt2 = _imp2.import_csv_text(paste, source="粘贴导入")
+                for w in stt2.get("warnings") or []:
+                    st.info(f"提醒：{w}")
+                if stt2["rows"]:
+                    st.success(f"已导入 {stt2['rows']} 行 → 新增 {stt2['inserted']} / 更新 {stt2['updated']}"
+                               f"（分隔符：{'制表符' if stt2.get('delimiter') == chr(9) else stt2.get('delimiter')}，"
+                               f"识别到的列：{'、'.join(stt2['mapping'].keys())}）")
+                    st.rerun()
+                else:
+                    st.warning("没解析出数据行：确认第一行是表头（列名如 岗位/公司/城市/链接），后面每行一条。")
+
     # ============ 说明 ============
     with tab9:
         st.markdown("#### 使用说明")

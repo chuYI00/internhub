@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
-"""CSV 导入（供网页与命令行共用）：把采集/整理的岗位清单写入库。"""
+"""CSV / TSV 导入（供网页与命令行共用）：把采集/整理的岗位清单写入库。
+
+支持：逗号 CSV、制表符 TSV（Excel / 飞书表格复制粘贴就是 TSV）、带 BOM、CRLF。
+"""
 import csv
 import hashlib
 import io
+import re
 
 from . import db
 
@@ -79,15 +83,44 @@ def _detect(headers):
     return mapping
 
 
+def _first_line(text: str) -> str:
+    for line in text.splitlines():
+        if line.strip():
+            return line
+    return ""
+
+
+def _sniff_delimiter(text: str) -> str:
+    """自动认分隔符：逗号 CSV / 制表符 TSV（从 Excel、飞书表格复制粘贴就是 TSV）/ 分号。
+
+    这样"飞书表格里 Ctrl+C → 粘进来"也能直接入库，不需要导出权限。
+    """
+    head = _first_line(text)
+    if not head.strip():
+        return ","
+    # 引号包起来的字段里出现的分隔符不算
+    stripped = re.sub(r'"[^"]*"', '""', head)
+    counts = {d: stripped.count(d) for d in ("\t", ",", ";", "|")}
+    best = max(counts, key=lambda d: counts[d])
+    return best if counts[best] > 0 else ","
+
+
 def import_csv_text(text: str, source: str = "CSV导入") -> dict:
-    """把 CSV 文本导入数据库，返回统计信息。"""
-    rows = list(csv.reader(io.StringIO(text.replace("\ufeff", ""))))
+    """把 CSV / TSV 文本导入数据库，返回统计信息。
+
+    支持：带 BOM、CRLF、逗号或制表符分隔、开头有空行、表头写中文别名。
+    """
+    text = (text or "").replace("\ufeff", "")
+    delim = _sniff_delimiter(text)
+    empty = {"rows": 0, "inserted": 0, "updated": 0, "skipped_dup": 0, "flagged": 0,
+             "mapping": {}, "delimiter": delim, "warnings": []}
+    rows = list(csv.reader(io.StringIO(text), delimiter=delim))
     if not rows:
-        return {"rows": 0, "inserted": 0, "updated": 0, "flagged": 0, "mapping": {}}
+        return dict(empty)
     while rows and not any(str(c).strip() for c in rows[0]):
         rows.pop(0)                      # 跳过开头的空行
     if not rows:
-        return {"rows": 0, "inserted": 0, "updated": 0, "flagged": 0, "mapping": {}}
+        return dict(empty)
     mp = _detect(rows[0])
     warnings = []
     if "title" not in mp:
@@ -133,4 +166,4 @@ def import_csv_text(text: str, source: str = "CSV导入") -> dict:
     if not jobs and warnings:
         res = {**res, "warnings": warnings}
     return {"rows": len(jobs), **res, "mapping": mp,
-            "warnings": warnings}
+            "warnings": warnings, "delimiter": delim}
