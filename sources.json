@@ -328,7 +328,8 @@
     "note": "应届生求职网首页的校招公告聚合（全国）；点进去是各企业官方网申入口，央企/大行/大厂开了 2027 校招第一时间知道",
     "enabled": true,
     "max_items": 40,
-    "min_title_len": 8
+    "min_title_len": 8,
+    "auto_company": true
   },
   {
     "name": "云南省教育厅·公示公告",

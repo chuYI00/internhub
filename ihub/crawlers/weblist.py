@@ -19,6 +19,7 @@ import os
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import parse_qs, unquote, urlparse
 
 import requests
 
@@ -35,6 +36,42 @@ MAX_WORKERS = 6              # 并发抓取源数量
 TAG_RE = re.compile(r"<[^>]+>")
 A_RE = re.compile(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', flags=re.S | re.I)
 DATE_RE = re.compile(r"(20\d{2}[-/年.]\d{1,2}[-/月.]\d{1,2})")
+
+# 公司名提取：从公告标题里砍掉年份/招聘类后缀，剩下的就是公司名。
+# 「中国建设银行2027年度校园招聘」→「中国建设银行」；「欧莱雅中国管培生项目火热招聘中」→「欧莱雅中国」
+_COMPANY_CUT = re.compile(
+    r"(20\d{2}\s*(届|年|年度|秋|春)?|校园招聘|校招|秋季招聘|秋招|春季招聘|春招|社会招聘|"
+    r"管培生|实习生|招聘|招募|启动|开启|火热|进行中|计划|公告)")
+_COMPANY_TAIL = re.compile(r"[的·\-—_:：、\s]+$")
+
+
+def _real_apply_url(href: str) -> str:
+    """把"跳转壳"链接还原成企业官方投递地址。
+
+    应届生求职网的公告链接是 `https://q.yingjiesheng.com/thirdlink?url=<企业官网，URL 编码>`，
+    真正能让用户去投递的是 url= 里那一段。解出来写进 official_url，
+    点开就是企业自己的网申系统（北森 / Moka / 飞书招聘 / 官网），不用先过第三方跳转页。
+    """
+    if not href:
+        return ""
+    try:
+        q = parse_qs(urlparse(unquote(href)).query)
+    except Exception:
+        return ""
+    for key in ("url", "target", "redirect", "link"):
+        vals = q.get(key) or []
+        if vals:
+            u = unquote(vals[0]).strip()
+            if u.startswith("http"):
+                return u
+    return ""
+
+
+def _company_from_title(title: str) -> str:
+    """从公告标题里猜公司名（只在源显式开启 auto_company 时使用）。"""
+    t = _COMPANY_CUT.split(_clean_title(title))[0]
+    t = _COMPANY_TAIL.sub("", t).strip()
+    return t if 2 <= len(t) <= 24 else ""
 
 
 def load_sources():
@@ -196,11 +233,18 @@ class WebListCrawler(BaseCrawler):
             if m:
                 deadline = m.group(1)
             job_id = hashlib.md5(full.encode("utf-8")).hexdigest()[:16]
+            # 跳转壳 → 企业官方投递地址（解不出来就用原链接兜底）
+            official = _real_apply_url(full) or full
+            company = s.get("company") or ""
+            if not company and s.get("auto_company"):
+                company = _company_from_title(title)          # 公告型数据源：从标题提公司名
+            if not company:
+                company = s.get("name") or ""
             out.append({
                 "source": s.get("name") or "网页列表",
                 "job_id": job_id,
                 "title": title[:120],
-                "company": s.get("company") or s.get("name") or "",
+                "company": company,
                 "city": _guess_city(title, s.get("city") or ""),
                 "salary": "",
                 "salary_min": None, "salary_max": None,
@@ -211,7 +255,7 @@ class WebListCrawler(BaseCrawler):
                 "link": full,
                 "deadline": deadline,
                 "published_at": "",
-                "official_url": full,
+                "official_url": official,
                 "job_type": s.get("job_type") or "秋招",
                 "batch": s.get("batch") or "2027届",
                 "requirement": "",

@@ -54,11 +54,42 @@ def export_box_csv():
     os.makedirs(OUT_DIR, exist_ok=True)
     with open(path, "w", encoding="utf-8-sig", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["岗位", "公司", "城市", "薪资", "截止日期", "来源", "投递链接"])
+        w.writerow(["岗位", "公司", "城市", "薪资", "截止日期", "来源", "官方投递入口", "原平台链接"])
         for r in rows:
             w.writerow([r["title"], r["company"], r["city"], r["salary"],
-                        r.get("deadline") or "", r["source"], r["link"]])
+                        r.get("deadline") or "", r["source"],
+                        r.get("official_url") or "", r["link"]])
     return path
+
+
+def apply_links_text(df) -> str:
+    """把「每条岗位去哪儿投」导成纯文本：优先企业官方投递页（能直达网申系统），
+    没有官方页就给原平台链接，并明确告诉你"官方入口缺失"。"""
+    L = ["投递入口清单（先进官方页面 → 再用网申助手填表 → 再上传对应简历）", "=" * 62, ""]
+    L.append("用法：① 点下面的官方入口进企业网申系统  ② 页面上点右下角「📝 网申助手」自动填")
+    L.append("      ③ 回本工具「🎯 投递工作台」生成这份岗位的定向简历并上传  ④ 标记已投防重复")
+    L.append("")
+    miss = 0
+    for i, r in enumerate(df.to_dict("records"), 1):
+        off = str(r.get("企业官网") or "").strip()
+        # 「企业官网」列如果是原链接的副本，说明这来源根本没给官方入口，别把它当官方页展示
+        if off and off == str(r.get("link") or "").strip():
+            off = ""
+        if not off:
+            miss += 1
+        L.append(f'[{i}] {r.get("title")}')
+        L.append(f'    公司：{r.get("company")}　城市：{r.get("city")}　'
+                 f'截止：{str(r.get("截止时间") or "")[:10] or "见公告"}')
+        L.append(f'    官方投递：{off if off else "—（该来源未提供官方入口，请按下面的原链接进）"}')
+        L.append(f'    原链接：{r.get("link")}')
+        L.append(f'    来源：{r.get("source")}')
+        L.append("")
+    if miss:
+        L.append(f"注：{miss} 条没有官方入口 —— 高校就业网/公众号这类来源经常只给"
+                 f"内推邮箱或跳转页，属正常；按原链接进去后一样能用网申助手填表。")
+    else:
+        L.append("注：本次全部岗位都拿到了官方投递入口。")
+    return "\n".join(L)
 
 
 def gen_resume_for(job, jd_text=None):
@@ -227,7 +258,7 @@ def main():
             st.divider()
             st.markdown("**🚀 广投：把「当前筛选结果」整批处理（昆明/大理 秋招适用）**")
             st.caption(f"当前筛选出 **{len(df)}** 条。下面按钮作用于这 {len(df)} 条，不用一条条勾选。")
-            b1, b2, b3 = st.columns([1.3, 1, 1])
+            b1, b2, b3, b4 = st.columns([1.2, 0.9, 0.9, 1.1])
             if b1.button("🚀 全部加入投递箱", type="primary", key="bulk_in"):
                 db.set_apply_state([(int(i), 1) for i in df["id"]])
                 st.success(f"已把 {len(df)} 条加入投递箱 → 去「🎯 投递工作台」批量生成材料")
@@ -236,14 +267,24 @@ def main():
                 db.set_apply_state([(int(i), 0) for i in df["id"]])
                 st.success(f"已把 {len(df)} 条移出投递箱")
                 st.rerun()
-            export = df[["title", "company", "city", "salary", "degree", "截止时间", "状态", "link"]].copy()
-            export.columns = ["岗位", "公司", "城市", "薪资", "学历", "截止日期", "状态", "投递链接"]
+            export = df[["title", "company", "city", "salary", "degree", "截止时间", "状态",
+                          "企业官网", "link"]].copy()
+            export.columns = ["岗位", "公司", "城市", "薪资", "学历", "截止日期", "状态",
+                              "官方投递入口", "原平台链接"]
             b3.download_button(
                 "⬇️ 导出清单 CSV",
                 export.to_csv(index=False).encode("utf-8-sig"),
                 file_name=f"广投清单_{f_city}_{job_type}_{datetime.date.today().isoformat()}.csv",
                 mime="text/csv", key="bulk_export",
                 help="带投递链接，可用 Excel/WPS 打开打印，投一个划掉一个")
+            if b4.download_button(
+                "⬇️ 官方投递入口清单",
+                apply_links_text(df).encode("utf-8"),
+                file_name=f"投递入口清单_{f_city}_{job_type}_{datetime.date.today().isoformat()}.txt",
+                mime="text/plain", key="bulk_links",
+                help="每条岗位一段：企业官方投递页（能直达网申系统）+ 原平台链接，手机上也能按着投",
+            ):
+                st.toast("已生成：投递入口清单（含官方网申入口）")
 
     # ============ 🏆 为你推荐 ============
     with tab2:

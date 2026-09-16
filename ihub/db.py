@@ -69,16 +69,26 @@ def connect():
 
 
 def backfill_official_urls() -> int:
-    """为已有岗位按公司名回填企业官网招聘入口。"""
+    """按公司名回填/升级「企业官网投递入口」。
+
+    注意一个历史盲点：部分来源（实习僧等）抓下来时把 official_url 直接填成了**原平台链接**，
+    于是"非空"判断会认为它已经有官方入口，真正的官网地址永远补不上。
+    这里改成：只有当 official_url 为空、或它只是 link 的副本时，才用映射表里的官网替换。
+    """
     conn = connect()
-    rows = conn.execute(
-        "SELECT id, company FROM jobs WHERE official_url IS NULL OR official_url=''").fetchall()
+    rows = conn.execute("SELECT id, company, official_url, link FROM jobs").fetchall()
     n = 0
     for r in rows:
         u = channels.official_for(str(r["company"] or ""))
-        if u:
-            conn.execute("UPDATE jobs SET official_url=? WHERE id=?", (u, r["id"]))
-            n += 1
+        if not u:
+            continue
+        cur = str(r["official_url"] or "")
+        if cur and cur != str(r["link"] or ""):
+            continue                      # 已经指向别处 → 是真的官方入口，不覆盖
+        if cur == u:
+            continue
+        conn.execute("UPDATE jobs SET official_url=? WHERE id=?", (u, r["id"]))
+        n += 1
     conn.commit()
     conn.close()
     return n
