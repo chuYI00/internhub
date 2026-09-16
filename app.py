@@ -558,16 +558,20 @@ def main():
         st.divider()
         st.markdown("**➕ 导入新的秋招岗位（自己找到的公告 / 采集助手导出的 CSV 都行）**")
         st.caption("CSV 表头（缺列也不影响）：岗位,公司,城市,学历,标签,链接,截止日期,描述,岗位类型(填“秋招”),届别,来源")
+        st.caption("支持 Excel 另存的 CSV、飞书多维表格「下载为 CSV」、以及采集助手/采集书签导出的文件；"
+                   "表头写「职位名称/单位名称/工作城市/薪资待遇」这类变体也能自动认出来。")
         upl = st.file_uploader("上传秋招 CSV（采集助手导出的文件直接传这里）", type=["csv"], key="csv_qiu")
         if upl is not None:
             txt = upl.read().decode("utf-8-sig", "ignore")
             from ihub import importer as _imp
             stt = _imp.import_csv_text(txt, source="采集导入")
+            for w in stt.get("warnings") or []:
+                st.info(f"提醒：{w}")
             if stt["rows"]:
                 st.success(f"已导入 {stt['rows']} 行 → 新增 {stt['inserted']} / 更新 {stt['updated']}"
                            f"（识别到的列：{'、'.join(stt['mapping'].keys())}）")
             else:
-                st.warning("没识别到“岗位”列：请确认表头含“岗位/职位/岗位名称”等列名")
+                st.warning("没识别到「岗位」列：请确认表头含“岗位/职位/岗位名称”等列名（第一列会被兜底当作岗位名）")
 
     # ============ 说明 ============
     with tab9:

@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     official_url TEXT DEFAULT '', -- 企业官方招聘入口（核验/直达用，可空）
     job_type TEXT DEFAULT '实习', -- 实习 / 秋招 / 校招
     batch TEXT DEFAULT '',        -- 届别，如 2027届
+    description TEXT DEFAULT '',  -- 备注/描述（采集表格里未识别的列会归到这里）
     dedup_key TEXT               -- 跨平台去重键（预留）
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_src_job ON jobs(source, job_id);
@@ -91,7 +92,8 @@ def init_db():
     for col, decl in (("deadline", "TEXT"), ("published_at", "TEXT"),
                       ("apply_state", "INTEGER DEFAULT 0"), ("apply_note", "TEXT DEFAULT ''"),
                       ("official_url", "TEXT DEFAULT ''"), ("job_type", "TEXT DEFAULT '实习'"),
-                      ("batch", "TEXT DEFAULT ''")):
+                      ("batch", "TEXT DEFAULT ''"),
+                      ("description", "TEXT DEFAULT ''")):
         if col not in cols:
             conn.execute(f"ALTER TABLE jobs ADD COLUMN {col} {decl}")
     # 迁移完成后才建涉及新列的索引
@@ -129,6 +131,7 @@ def upsert_jobs(jobs: list) -> dict:
                 1, int(is_fake), reason, 0,
                 j.get("deadline"), j.get("published_at"), official,
                 jtype, batch,
+                str(j.get("description") or ""),
                 j.get("dedup_key"),
             )
             if row is None:
@@ -136,8 +139,9 @@ def upsert_jobs(jobs: list) -> dict:
                     """INSERT INTO jobs (source, job_id, title, company, city, salary,
                        salary_min, salary_max, degree, duration, tags, industry, link,
                        fetched_at, updated_at, is_active, is_fake, fake_reason, favorite,
-                       deadline, published_at, official_url, job_type, batch, dedup_key)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", vals)
+                       deadline, published_at, official_url, job_type, batch, description,
+                       dedup_key)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", vals)
                 res["inserted"] += 1
             else:
                 # 已有记录：更新内容；风险标记取“任一来源判定为风险”则标风险
@@ -150,6 +154,7 @@ def upsert_jobs(jobs: list) -> dict:
                        official_url = COALESCE(?, official_url),
                        job_type = CASE WHEN ?!='' THEN ? ELSE job_type END,
                        batch = CASE WHEN ?!='' THEN ? ELSE batch END,
+                       description = CASE WHEN ?!='' THEN ? ELSE description END,
                        is_fake = MAX(is_fake, ?), fake_reason = CASE WHEN is_fake=1 THEN fake_reason ELSE ? END
                        WHERE source=? AND job_id=?""",
                     (j.get("title"), j.get("company"), j.get("city"), j.get("salary"),
@@ -157,6 +162,7 @@ def upsert_jobs(jobs: list) -> dict:
                      j.get("duration"), j.get("tags"), j.get("industry"), j.get("link"),
                      now, j.get("deadline"), j.get("published_at"), official,
                      jtype, jtype, batch, batch,
+                     str(j.get("description") or ""), str(j.get("description") or ""),
                      int(is_fake), reason, j.get("source", "实习僧"), job_id))
                 res["updated"] += 1
             if is_fake:
