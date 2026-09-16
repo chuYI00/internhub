@@ -177,6 +177,27 @@ def main():
                 st.success(f"已更新：收藏 {len(fav_ids)} 条；投递箱 {sum(1 for _, v in pairs if v)} 条")
                 st.rerun()
 
+            st.divider()
+            st.markdown("**🚀 广投：把「当前筛选结果」整批处理（昆明/大理 秋招适用）**")
+            st.caption(f"当前筛选出 **{len(df)}** 条。下面按钮作用于这 {len(df)} 条，不用一条条勾选。")
+            b1, b2, b3 = st.columns([1.3, 1, 1])
+            if b1.button("🚀 全部加入投递箱", type="primary", key="bulk_in"):
+                db.set_apply_state([(int(i), 1) for i in df["id"]])
+                st.success(f"已把 {len(df)} 条加入投递箱 → 去「🎯 投递工作台」批量生成材料")
+                st.rerun()
+            if b2.button("➖ 全部移出投递箱", key="bulk_out"):
+                db.set_apply_state([(int(i), 0) for i in df["id"]])
+                st.success(f"已把 {len(df)} 条移出投递箱")
+                st.rerun()
+            export = df[["title", "company", "city", "salary", "degree", "截止时间", "状态", "link"]].copy()
+            export.columns = ["岗位", "公司", "城市", "薪资", "学历", "截止日期", "状态", "投递链接"]
+            b3.download_button(
+                "⬇️ 导出清单 CSV",
+                export.to_csv(index=False).encode("utf-8-sig"),
+                file_name=f"广投清单_{f_city}_{job_type}_{datetime.date.today().isoformat()}.csv",
+                mime="text/csv", key="bulk_export",
+                help="带投递链接，可用 Excel/WPS 打开打印，投一个划掉一个")
+
     # ============ 🏆 为你推荐 ============
     with tab2:
         st.markdown("#### 🏆 岗位推荐（钱多 / 轻松 / 专业契合 综合打分）")

@@ -44,6 +44,8 @@ def main() -> int:
         ["node", "tests/bookmarklet_test.js"], "采集书签 采集书签.txt")
     results["CSV 导入链路"] = run(
         [PY, "tests/test_import_csv.py"], "CSV 导入 → 入库")
+    results["网页端冒烟（9 个页签 + 广投按钮）"] = run(
+        [PY, "tests/test_app_smoke.py"], "Streamlit 无头渲染")
 
     print("\n================ 汇总 ================")
     for k, v in results.items():
