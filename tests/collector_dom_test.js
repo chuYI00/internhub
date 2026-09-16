@@ -20,6 +20,8 @@ function run(root) {
     console,
     setTimeout,
     clearTimeout,
+    setInterval: () => 0,
+    clearInterval: () => {},
     confirm: () => true,
     alert: msg => { sandbox.__alert = msg; },
     location: { hostname: 'job.example.edu.cn', href: 'https://job.example.edu.cn/list' },
@@ -124,6 +126,69 @@ console.log('[4] 无表头 / 岗位列名不标准（兜底取最长文本列）
   check('兜底解析出 3 条', rows.length === 3, rows.length);
   check('用最长文本列当岗位名', /云南机场集团/.test(rows[0].title), rows[0].title);
   check('城市识别正确', rows[0].city === '昆明', rows[0].city);
+}
+
+/* ---- 用例 5：飞书式多维表格（class 名完全是随机的，只能靠"重复行"结构兜底） ---- */
+console.log('[5] 飞书式多维表格：随机 class 名 + 左侧勾选列 + 无 role 属性');
+{
+  function cell(text) {                       // 飞书单元格：div > div > span 文字
+    const c = new El('div'); c.setAttribute('class', 'ud__cell__' + Math.random().toString(36).slice(2, 8));
+    const inner = new El('div'); inner.setAttribute('class', 'cell-content');
+    const sp = new El('span'); sp.appendText(String(text));
+    inner.appendChild(sp); c.appendChild(inner);
+    return c;
+  }
+  function row(vals) {
+    const r = new El('div'); r.setAttribute('class', 'grid-row-x');
+    const cb = new El('div'); cb.setAttribute('class', 'row-check');   // 勾选列（无文字）
+    cb.appendChild(new El('input'));
+    r.appendChild(cb);
+    vals.forEach(v => r.appendChild(cell(v)));
+    return r;
+  }
+  function feishuTable(headers, dataRows) {
+    const box = new El('div'); box.setAttribute('class', 'bitable-grid-body-xyz');
+    box.appendChild(row(headers));            // 表头行
+    dataRows.forEach(d => box.appendChild(row(d)));
+    return box;
+  }
+  const root = new El('body');
+  root.appendChild(feishuTable(
+    ['更新日期', '公司名称', '所属行业', '届别', '学历', '招聘类型', '备注', '可投岗位'],
+    [
+      ['2026/09/15', '东吴证券', '金融/银行/保险', '27届', '本科', '27届秋招', '尽快投递', '投行项目助理、债券承做'],
+      ['2026/09/15', '能研院（上海成套院）', '能源/化工/环保', '27届', '本科', '27届秋招', '党员优先', '应届生到手岗、研发工程师'],
+      ['2026/09/15', '爱慕股份', '快消/零售/消费', '27届', '本科', '27届秋招', '—', '产品企划、服装设计'],
+      ['2026/09/15', '共创草坪', '农业/林业/其他', '27届', '本科', '27届秋招', '—', '营销类管培生、产品类'],
+    ]));
+  const api = run(root);
+  const g = api.readGrid();
+  check('兜底识别到网格', !!g, g && g.mode);
+  check('识别方式标为"重复行结构(兜底)"', g && /兜底/.test(g.mode), g && g.mode);
+  check('拿到 4 行数据', g && g.rows.length === 4, g && g.rows.length);
+  const rows = api.rowsFromGrid(g);
+  check('解析出 4 条岗位', rows.length === 4, rows.length);
+  check('公司名正确', rows[0].company === '东吴证券', rows[0].company);
+  check('岗位名取"可投岗位"列（模糊匹配）',
+    /投行项目助理/.test(rows[0].title), rows[0].title);
+  check('学历列正确', rows[0].degree === '本科', rows[0].degree);
+  check('届别列正确', rows[0].batch === '27届', rows[0].batch);
+  check('招聘类型列正确', rows[0].jobType === '27届秋招', rows[0].jobType);
+  check('备注进标签', /尽快投递/.test(rows[0].tags), rows[0].tags);
+}
+
+/* ---- 用例 6：纯 canvas 渲染的表格要能"明确说抓不到"，而不是假成功 ---- */
+console.log('[6] 诊断能力：canvas 表格应被识别为"抓不到"');
+{
+  const root = new El('body');
+  const cv = new El('canvas');
+  root.appendChild(cv);
+  const api = run(root);
+  const g = api.readGrid();
+  check('canvas 页面不返回假表格', g === null, g && g.mode);
+  check('诊断函数可调用且不抛错', (function () {
+    try { api.diagnose(); return true; } catch (e) { return false; }
+  })());
 }
 
 console.log('\n结果: ' + pass + ' 通过, ' + fail + ' 失败');

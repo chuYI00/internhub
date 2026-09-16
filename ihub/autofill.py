@@ -18,6 +18,7 @@ v2 相比 v1 的改进（v1 的致命问题：把整个表单的文字当成字�
 """
 import json
 import os
+import re
 
 from . import config, profile as profile_mod
 
@@ -506,10 +507,18 @@ def build_js(prof=None) -> str:
     return _TEMPLATE.replace("__PAYLOAD__", payload)
 
 
+def _atomic_write(path: str, content: str) -> None:
+    """先写临时文件再替换：生成失败时绝不把已能用的旧文件清空。"""
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(content)
+    os.replace(tmp, path)
+
+
 def save_userscript(path: str = None, prof=None) -> str:
     path = path or os.path.join(config.PROJECT_ROOT, SCRIPT_NAME)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(build_js(prof))
+    content = build_js(prof)                 # 先完整生成，再落盘
+    _atomic_write(path, content)
     return path
 
 
@@ -519,12 +528,15 @@ _BOOKMARK_TAIL = "go();})()"
 
 
 def _minify(js: str) -> str:
-    """压成一行（去掉整行注释/缩进，并在 ASI 会出问题处补分号）。"""
+    """压成一行（先把行尾 // 注释改成块注释，再补 ASI 需要的分号）。"""
     lines = []
     for line in js.split("\n"):
         s = line.strip()
         if not s or s.startswith("//"):
             continue
+        m = re.match(r"^(.*?[{;])\s*//\s*(.+)$", s)
+        if m and "*/" not in m.group(2):
+            s = m.group(1) + "  /* " + m.group(2).strip() + " */"
         lines.append(s)
     out = []
     for i, s in enumerate(lines):
@@ -566,8 +578,8 @@ def build_bookmarklet(prof=None) -> str:
 
 def save_bookmarklet(path: str = None, prof=None) -> str:
     path = path or os.path.join(config.PROJECT_ROOT, BOOKMARK_NAME)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(build_bookmarklet(prof) + "\n")
+    content = build_bookmarklet(prof)         # 先完整生成，再落盘
+    _atomic_write(path, content + "\n")
     return path
 
 

@@ -10,6 +10,7 @@
 不登录、不提交、不绕过验证码、不调用平台私有接口。
 """
 import os
+import re
 
 from . import config
 
@@ -59,93 +60,259 @@ def build_js() -> str:
 
   function host() { return location.hostname.replace(/^www\./, ''); }
 
-  /* ---------------- 通用表格（HTML table / 飞书多维表格） ---------------- */
+  /* ---------------- 通用表格（HTML table / 飞书多维表格 / 任意"重复行"结构） ---------------- */
 
-  function scrollableAncestors(el) {
-    const out = [];
-    let n = el;
-    while (n && n !== document.body) {
-      const st = getComputedStyle(n);
-      if (/(auto|scroll)/.test(st.overflowY) && n.scrollHeight > n.clientHeight + 20) out.push(n);
-      n = n.parentElement;
-    }
-    return out;
+    var SCROLL_BUDGET_MS = 9000;  /* 自动滚动总预算：宁可少抓几行，也不能让用户干等 */
+  var SCROLL_STEP_MS = 140;
+
+    function countRows() {  /* 当前已渲染的"疑似数据行"数量（用于判断是否还在加载） */
+    var n = document.querySelectorAll('[role="row"], tr, [data-row-index], [class*="row-wrapper"], [class*="grid-row"]').length;
+    return n;
   }
 
   async function autoScrollAll() {
-    // 虚拟滚动表格（飞书多维表格）默认只渲染可视区，需要先滚动把数据加载满
-    const boxes = [];
-    document.querySelectorAll('div').forEach(d => {
-      const st = getComputedStyle(d);
+    // 虚拟滚动表格（飞书多维表格等）只渲染可视区，先滚动把数据加载出来；有总时间上限
+    var boxes = [];
+    document.querySelectorAll('div').forEach(function (d) {
+      var st = getComputedStyle(d);
       if (/(auto|scroll)/.test(st.overflowY) && d.scrollHeight > d.clientHeight + 60 && d.clientHeight > 200) boxes.push(d);
     });
-    for (const box of boxes.slice(0, 3)) {
-      let last = -1, guard = 0;
-      while (guard++ < 120 && box.scrollHeight !== last) {
-        last = box.scrollHeight;
-        box.scrollTop = box.scrollHeight;
-        await new Promise(r => setTimeout(r, 220));
+    var deadline = Date.now() + SCROLL_BUDGET_MS;
+    for (var b = 0; b < Math.min(boxes.length, 3); b++) {
+      var box = boxes[b], lastCount = -1, stall = 0;
+      while (Date.now() < deadline && stall < 4) {
+        var before = countRows();
+        box.scrollTop = box.scrollTop + Math.max(box.clientHeight * 0.9, 200);
+        await new Promise(function (r) { setTimeout(r, SCROLL_STEP_MS); });
+        var after = countRows();
+        if (after <= before && after === lastCount) { stall++; } else { stall = 0; }
+        lastCount = after;
+                if (box.scrollTop + box.clientHeight >= box.scrollHeight - 4) {  /* 到底了，回头再滚一遍把没加载的补齐 */
+          await new Promise(function (r) { setTimeout(r, 250); });
+          box.scrollTop = 0;
+          await new Promise(function (r) { setTimeout(r, SCROLL_STEP_MS); });
+        }
       }
     }
-    await new Promise(r => setTimeout(r, 400));
+    await new Promise(function (r) { setTimeout(r, 300); });
   }
 
   function cellText(cell) {
-    const a = cell.querySelector && cell.querySelector('a[href^="http"]');
-    let url = '';
+    var a = cell.querySelector && cell.querySelector('a[href^="http"]');
+    var url = '';
     if (a) url = a.href;
-    let text = clean(cell.innerText || cell.textContent || '');
+    var text = clean(cell.innerText || cell.textContent || '');
     if (!url) {
-      const m = text.match(/https?:\/\/[^\s，,；;）)]+/);
+      var m = text.match(/https?:\/\/[^\s，,；;）)]+/);
       if (m) url = m[0];
     }
     return { text: text, url: url };
   }
 
-  // 把表格网格解析成 {headers:[], rows:[[{text,url}]]}
+  /* --- 通用兜底：不依赖 class 名，靠"重复行"结构找表格 --- */
+  function textLeafCount(el) {
+    if (!el || !el.querySelectorAll) return 0;
+    var leaves = el.querySelectorAll('*'), n = 0;
+    for (var i = 0; i < leaves.length; i++) {
+      if (leaves[i].children && leaves[i].children.length === 0) {
+        if (clean(leaves[i].textContent)) n++;
+      }
+    }
+    if (n === 0 && clean(el.textContent)) n = 1;
+    return n;
+  }
+  function mostCommon(arr) {
+    var m = {}, best = 0, bestN = 0;
+    arr.forEach(function (v) { m[v] = (m[v] || 0) + 1; if (m[v] > bestN) { bestN = m[v]; best = v; } });
+    return Number(best);
+  }
+  function rowCells(rowEl) {
+    // 一行的"单元格"= 直接子元素里有文字的；子元素太少则再往下一层找
+    var kids = Array.prototype.slice.call(rowEl.children || []);
+    var cells = kids.filter(function (k) { return textLeafCount(k) > 0; });
+    if (cells.length >= 2) return cells;
+    var deeper = [];
+    kids.forEach(function (k) {
+      Array.prototype.slice.call(k.children || []).forEach(function (kk) {
+        if (textLeafCount(kk) > 0) deeper.push(kk);
+      });
+    });
+    return deeper.length >= 2 ? deeper : cells;
+  }
+  function detectGridsHeuristic() {
+    var cands = [];
+    var boxes = document.querySelectorAll('div,ul,ol,tbody,section,main');
+    for (var i = 0; i < boxes.length; i++) {
+      var box = boxes[i];
+      var kids = Array.prototype.slice.call(box.children || []);
+      if (kids.length < 3 || kids.length > 400) continue;
+      var counts = kids.map(textLeafCount);
+      var nonEmpty = counts.filter(function (c) { return c > 0; });
+            if (nonEmpty.length / kids.length < 0.85) continue;  /* 大多数孩子都得有文字 */
+      var mode = mostCommon(nonEmpty);
+            if (mode < 2) continue;  /* 至少 2 列 */
+      var rowEls = kids.filter(function (k) { return Math.abs(textLeafCount(k) - mode) <= 1; });
+      if (rowEls.length < 3) continue;
+      // 每行都得能切出 >=2 个格子，否则不是表格
+      var ok = 0;
+      for (var r = 0; r < Math.min(rowEls.length, 8); r++) if (rowCells(rowEls[r]).length >= 2) ok++;
+      if (ok < Math.min(rowEls.length, 8) * 0.8) continue;
+      cands.push({ rows: rowEls, cols: mode, score: rowEls.length * mode, box: box });
+    }
+    cands.sort(function (a, b) { return b.score - a.score; });
+    return cands;
+  }
+
+  function looksLikeHeader(cells) {
+    var H = /^[^0-9]{0,8}(日期|时间|公司|单位|企业|岗位|职位|城市|地点|地区|学历|届|类型|备注|专业|行业|薪资|待遇|链接|网址|要求|状态|编号|序号|名称|性质|批次|是否|领域|方向|文档|投递|招聘)/;
+    var hit = 0, short = 0;
+    cells.forEach(function (c) {
+      var t = clean(c.innerText || c.textContent);
+      if (!t || t.length <= 10) short++;
+      if (H.test(t)) hit++;
+    });
+    return hit >= 2 || (hit >= 1 && short === cells.length);
+  }
+
+  function gridFromRows(rowEls, headerEls) {
+    var headers = headerEls ? rowCells(headerEls).map(function (c) { return clean(c.innerText || c.textContent); }) : [];
+    var body = rowEls.filter(function (r) { return r !== headerEls; });   // 表头不再当数据行
+    var rows = [];
+    body.forEach(function (r) {
+      var cells = rowCells(r).map(cellText);
+      if (cells.length < 2) return;
+      if (!cells.some(function (c) { return c.text; })) return;
+      rows.push(cells);
+    });
+    if (headers.length && rows.length && headers.length !== rows[0].length) {
+      // 表头列数和数据列数对不上（常见于前面多了一列勾选框）：按"去掉空表头"重算
+      var h2 = headers.filter(function (h) { return clean(h); });
+      headers = h2.length === rows[0].length ? h2 : headers;
+    }
+    return { headers: headers, rows: rows };
+  }
+
+  // 把表格网格解析成 {headers:[], rows:[[{text,url}]], mode:'...'}；都失败返回 null
   function readGrid() {
-    // 1) 标准 <table>
-    const tables = Array.from(document.querySelectorAll('table')).filter(t => t.rows && t.rows.length >= 2);
-    if (tables.length) {
-      let best = tables[0], bestScore = -1;
-      for (const t of tables) {
-        const head = t.rows[0];
-        if (!head) continue;
-        const cols = head.cells.length;
-        const score = (t.rows.length - 1) * Math.max(cols, 1);
-        if (cols >= 2 && cols <= 30 && score > bestScore) { best = t; bestScore = score; }
-      }
-      const rows = [];
-      const headers = Array.from(best.rows[0].cells).map(c => clean(c.innerText || c.textContent));
-      for (let i = 1; i < best.rows.length; i++) {
-        const r = best.rows[i];
+    // 1) 标准 <table>（优先，最靠谱）
+    var tables = Array.prototype.slice.call(document.querySelectorAll('table')).filter(function (t) {
+      return t.rows && t.rows.length >= 2;
+    });
+    var bestT = null, bestScore = -1;
+    tables.forEach(function (t) {
+      var head = t.rows[0];
+      if (!head) return;
+      var cols = head.cells.length;
+      if (cols < 2 || cols > 40) return;
+      var score = (t.rows.length - 1) * cols;
+      if (score > bestScore) { bestT = t; bestScore = score; }
+    });
+    if (bestT) {
+      var tRows = [];
+      var tHeaders = Array.prototype.slice.call(bestT.rows[0].cells).map(function (c) { return clean(c.innerText || c.textContent); });
+      for (var i = 1; i < bestT.rows.length; i++) {
+        var r = bestT.rows[i];
         if (!r.cells || !r.cells.length) continue;
-        rows.push(Array.from(r.cells).map(cellText));
+        tRows.push(Array.prototype.slice.call(r.cells).map(cellText));
       }
-      if (rows.length) return { headers: headers, rows: rows };
+      if (tRows.length >= 1 && tHeaders.filter(function (h) { return h; }).length >= 2) {
+        return { headers: tHeaders, rows: tRows, mode: '网页表格(table)' };
+      }
     }
 
-    // 2) 多维表格网格（飞书 bitable / 通用 role=grid）
-    const grids = document.querySelectorAll('[role="grid"], .bitable-table, .grid-view, [class*="bitable"]');
-    for (const g of grids) {
-      const rowEls = g.querySelectorAll('[role="row"], tr, [class*="row-wrapper"]');
-      const parsed = [];
-      const headerSet = [];
-      rowEls.forEach((r, idx) => {
-        const cells = r.querySelectorAll('[role="gridcell"], [role="columnheader"], td, [class*="cell"]');
+    // 2) 显式选择器（飞书 bitable / ARIA grid / 常见表格组件）
+    var grids = document.querySelectorAll(
+      '[role="grid"], [role="table"], .bitable-table, .grid-view, [class*="bitable"], [class*="sheet-grid"], [class*="GridTable"]');
+    for (var gi = 0; gi < grids.length; gi++) {
+      var g = grids[gi];
+      var rowEls = Array.prototype.slice.call(
+        g.querySelectorAll('[role="row"], tr, [class*="row-wrapper"], [data-row-index]'));
+      var dataRows = [];
+      var headerRow = null;
+      rowEls.forEach(function (rr) {
+        var cells = rr.querySelectorAll('[role="gridcell"], [role="columnheader"], td, th, [class*="cell"]');
         if (cells.length < 2) return;
-        const vals = Array.from(cells).map(cellText);
-        if (idx === 0 || r.querySelector('[role="columnheader"]')) {
-          if (!headerSet.length) vals.forEach(v => headerSet.push(v.text));
-          return;
-        }
-        if (vals.some(v => v.text)) parsed.push(vals);
+        if (!headerRow && rr.querySelector('[role="columnheader"], th')) headerRow = rr;
+        dataRows.push(rr);
       });
-      if (parsed.length >= 2) {
-        return { headers: headerSet, rows: parsed };
+      if (headerRow) dataRows = dataRows.filter(function (x) { return x !== headerRow; });
+      if (dataRows.length >= 1) {
+        var gg = gridFromRows(dataRows, headerRow);
+        if (gg.rows.length >= 1) { gg.mode = '多维表格(选择器)'; return gg; }
+      }
+    }
+
+    // 3) 通用兜底：靠"重复行"结构（不依赖任何 class 名）
+    var cands = detectGridsHeuristic();
+    for (var ci = 0; ci < cands.length; ci++) {
+      var c = cands[ci];
+      var rowEls2 = c.rows.slice();
+      var headEl = null;
+      var boxFirst = c.box.children && c.box.children[0];
+      if (rowEls2.length >= 2) {
+        var cand0 = rowEls2[0];
+        // 第一个匹配行既是容器的第一个孩子、或长得像表头 → 当表头
+        if (cand0 === boxFirst || looksLikeHeader(rowCells(cand0))) headEl = cand0;
+      }
+      // 容器第一个孩子不是匹配行但也能切出 >=2 格 → 它才是表头
+      if (!headEl && boxFirst && rowEls2.indexOf(boxFirst) < 0 && rowCells(boxFirst).length >= 2) headEl = boxFirst;
+      var g2 = gridFromRows(rowEls2, headEl);
+      if (g2.rows.length >= 2 || (g2.rows.length >= 1 && g2.headers.filter(function (x) { return clean(x); }).length >= 2)) {
+        g2.mode = '重复行结构(兜底)';
+        return g2;
       }
     }
     return null;
+  }
+
+  /* --- 🐞 结构诊断：把页面上"像表格"的结构导出成 txt，发我就能精确定位 --- */
+  function diagnose() {
+    var lines = [];
+    lines.push('URL: ' + location.href);
+    lines.push('title: ' + document.title);
+    lines.push('已渲染疑似行数: ' + countRows());
+    lines.push('');
+    lines.push('== 显式选择器命中 ==');
+    ['[role="grid"]', '[role="row"]', '[role="gridcell"]', '[role="columnheader"]',
+     '.bitable-table', '[class*="bitable"]', '[class*="grid"]', '[data-row-index]', 'table', 'tr'
+    ].forEach(function (sel) {
+      var n = 0;
+      try { n = document.querySelectorAll(sel).length; } catch (e) {}
+      lines.push('  ' + sel + ' -> ' + n);
+    });
+    var gg = readGrid();
+    lines.push('');
+    lines.push('== readGrid 结果 == ' + (gg ? (gg.mode + ' 行=' + gg.rows.length + ' 列=' + gg.rows[0].length) : '未识别到'));
+    if (gg) {
+      lines.push('  表头: ' + JSON.stringify(gg.headers));
+      lines.push('  第一行: ' + JSON.stringify(gg.rows[0].map(function (x) { return x.text; })));
+    }
+    lines.push('');
+    lines.push('== 候选"重复行"容器（前 8 个）==' );
+    var cands = detectGridsHeuristic();
+    if (!cands.length) lines.push('  （无）');
+    cands.slice(0, 8).forEach(function (c, i) {
+      lines.push('  #' + (i + 1) + ' <' + c.box.tagName.toLowerCase() + ' class="' + String(c.box.className || '').slice(0, 120) +
+        '"> 行数=' + c.rows.length + ' 列数=' + c.cols);
+      lines.push('     首行格子: ' + JSON.stringify(rowCells(c.rows[0]).map(function (x) { return clean(x.innerText).slice(0, 24); })));
+    });
+    lines.push('');
+    lines.push('== 含文字最多的 div（前 6 个，看是不是 canvas 渲染）==');
+    var divs = Array.prototype.slice.call(document.querySelectorAll('div'));
+    divs.sort(function (a, b) { return clean(b.innerText || '').length - clean(a.innerText || '').length; });
+    divs.slice(0, 6).forEach(function (d) {
+      lines.push('  <div class="' + String(d.className || '').slice(0, 100) + '"> 字数=' + clean(d.innerText || '').length +
+        ' 子元素=' + (d.children ? d.children.length : 0));
+    });
+    lines.push('');
+    lines.push('canvas 数量: ' + document.querySelectorAll('canvas').length +
+      '（如果 >0 且上面没有候选行，说明表格是 canvas 画的，DOM 抓不到，只能用"复制粘贴导入"）');
+    var blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '结构诊断_' + host() + '_' + new Date().toISOString().slice(0, 10) + '.txt';
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
   }
 
   function mapHeaders(headers, sample) {
@@ -157,7 +324,19 @@ def build_js() -> str:
         if (map[key] === undefined && HEAD_KEYS[key].test(n)) { map[key] = i; break; }
       }
     });
-    // 兜底：没识别出岗位列时，挑“最长文本”的列当岗位名
+    // 模糊一轮：表头写成"可投岗位/招聘岗位/岗位信息"这类也要认出来
+    if (map.title === undefined) {
+      const TITLE_FUZZY = /(岗位|职位|职务)/;
+      for (let i = 0; i < headers.length; i++) {
+        if (TITLE_FUZZY.test(norm(headers[i]))) { map.title = i; break; }
+      }
+    }
+    if (map.location === undefined) {
+      for (let i = 0; i < headers.length; i++) {
+        if (/(省市|地点|区域|工作地)/.test(norm(headers[i]))) { map.city = i; break; }
+      }
+    }
+    // 还是没识别出岗位列 → 挑“最长文本”的列当岗位名
     if (map.title === undefined && sample && sample.length) {
       const cols = Math.max.apply(null, sample.map(r => r.length));
       let bestCol = 0, bestLen = -1;
@@ -274,27 +453,47 @@ def build_js() -> str:
   /* ---------------- 入口 ---------------- */
 
   let busy = false;
-  let btn = null;
+  let btn = null, diagBtn = null;
   function setStatus(t) { if (btn) btn.textContent = t; }
+
+  async function collectOnce(doScroll) {
+    if (doScroll) {
+      setStatus('⏳ 正在滚动加载（最多 9 秒）…');
+      try { await autoScrollAll(); } catch (e) { /* ignore */ }
+    }
+    setStatus('⏳ 正在解析…');
+    const grid = readGrid();
+    const rows = (grid && grid.rows.length >= 1) ? rowsFromGrid(grid) : rowsFromCards();
+    return { grid: grid, rows: rows };
+  }
+
   async function onClick() {
     if (busy) return;
     busy = true;
     try {
-      setStatus('⏳ 正在加载全部行…');
-      const grid0 = readGrid();
-      // 表格页先尝试自动滚动（虚拟滚动只渲染可见行）
-      if (!grid0 || grid0.rows.length < 50) {
-        try { await autoScrollAll(); } catch (e) { /* ignore */ }
+      // 第一次：如果还没滚动过，先滚动；滚完还读不到，再用卡片方式兜底
+      let first = await collectOnce(countRows() < 40);
+      if (!first.rows.length) {
+        const second = await collectOnce(true);
+        if (second.rows.length) first = second;
       }
-      setStatus('⏳ 正在解析…');
-      const grid = readGrid();
-      const rows = (grid && grid.rows.length >= 2) ? rowsFromGrid(grid) : rowsFromCards();
-      if (!rows.length) {
-        alert('没识别到数据。\n\n建议：\n1) 先滚动页面把内容加载出来\n2) 表格页请确认表头在第一行\n3) 卡片页请确认岗位标题已渲染');
+      if (!first.rows.length) {
+        alert('没识别到数据。\n\n' +
+          '① 如果这是飞书/钉钉多维表格：请先在表里用「筛选」把范围缩小（例如只在云南、2027届），\n' +
+          '   行数太多（几千上万行）时网页只会渲染一小部分，抓不全。\n' +
+          '② 更稳的办法：在表格里选中区域 → Ctrl+C → 到 InternHub「📚 备考方案」页用「📋 直接粘贴导入」。\n' +
+          '③ 想让我精确定位这个网站：点右下角「🐞 结构诊断」，把下载的 txt 发我。');
         return;
       }
-      const mode = (grid && grid.rows.length >= 2) ? '网页表格' : '岗位卡片';
-      if (confirm('识别方式：' + mode + '\n共 ' + rows.length + ' 条\n\n导出 CSV？\n（导出后在 InternHub「📥 导入」里一键入库）')) download(rows);
+      const mode = first.grid ? first.grid.mode : '岗位卡片';
+      const note = (first.grid && first.grid.mode.indexOf('兜底') >= 0)
+        ? '\n（用的是通用结构识别，列名可能对不齐，导入后可在网站里改）' : '';
+      if (confirm('识别方式：' + mode + '\n识别到 ' + first.rows.length + ' 条' + note +
+                  '\n\n导出 CSV？\n（导出后在 InternHub「📚 备考方案」页底部上传，或直接粘贴导入）')) {
+        download(first.rows);
+      }
+    } catch (e) {
+      alert('采集出错：' + (e && e.message ? e.message : e));
     } finally {
       setStatus('📥 采集本页岗位');
       busy = false;
@@ -302,25 +501,53 @@ def build_js() -> str:
   }
 
   // __BOOKMARK_CUT__ 书签版从这里截断（书签版不需要悬浮按钮）
-  btn = document.createElement('button');
-  btn.textContent = '📥 采集本页岗位';
-  btn.style.cssText = 'position:fixed;right:18px;bottom:72px;z-index:999999;padding:10px 14px;' +
-    'background:#0a6cb0;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;' +
-    'box-shadow:0 2px 8px rgba(0,0,0,.25)';
-  btn.onclick = onClick;
-  window.addEventListener('load', () => document.body.appendChild(btn));
+  function mountButtons() {
+    btn = document.createElement('button');
+    btn.textContent = '📥 采集本页岗位';
+    btn.style.cssText = 'position:fixed;right:18px;bottom:72px;z-index:999999;padding:10px 14px;' +
+      'background:#0a6cb0;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;' +
+      'box-shadow:0 2px 8px rgba(0,0,0,.25)';
+    btn.onclick = onClick;
+    document.body.appendChild(btn);
+
+    diagBtn = document.createElement('button');
+    diagBtn.textContent = '🐞 结构诊断';
+    diagBtn.title = '抓不到数据时点它：会导出一份页面结构说明，发给开发者就能定位';
+    diagBtn.style.cssText = 'position:fixed;right:18px;bottom:118px;z-index:999999;padding:6px 10px;' +
+      'background:#6e7781;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;opacity:.85';
+    diagBtn.onclick = function () { try { diagnose(); } catch (e) { alert('诊断失败：' + e.message); } };
+    document.body.appendChild(diagBtn);
+  }
+  mountButtons();
+  setInterval(function () {
+    if (document.body && (!btn || !document.body.contains(btn))) {
+      btn = null; diagBtn = null; mountButtons();
+    }
+  }, 2500);
 
   // 调试/自测入口（本地脚本，不影响功能）
   window.__IHUB_COLLECTOR__ = { readGrid: readGrid, rowsFromGrid: rowsFromGrid,
-    mapHeaders: mapHeaders, csv: csv, rowsFromCards: rowsFromCards, collect: onClick };
+    mapHeaders: mapHeaders, csv: csv, rowsFromCards: rowsFromCards, collect: onClick,
+    diagnose: diagnose, detectGridsHeuristic: detectGridsHeuristic, rowCells: rowCells };
 })();
 """
 
 
+def _atomic_write(path: str, content: str) -> None:
+    """先写临时文件再替换：生成失败时绝不把已能用的旧文件清空。
+
+    （踩过的坑：`open(path,'w')` 会先截断文件，之后生成报错就把书签文件写成了空文件。）
+    """
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(content)
+    os.replace(tmp, path)
+
+
 def save_userscript(path: str = None) -> str:
     path = path or os.path.join(config.PROJECT_ROOT, "采集助手.user.js")
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(build_js())
+    content = build_js()                      # 先完整生成，再落盘
+    _atomic_write(path, content)
     return path
 
 
@@ -331,15 +558,19 @@ _BOOKMARK_TAIL = "onClick();})()"
 def _minify(js: str) -> str:
     """去掉整行注释与缩进，压成一行。
 
-    关键坑：压行后 JS 的"自动分号插入(ASI)"会失效——
-    上一行以 `)`/`}`/标识符结尾、下一行以 `(`/`[`/`+`/`-` 开头时，
-    两行会被连成一次函数调用/下标访问，直接语法报错。这里检测并补分号。
+    两个坑：
+    1. 行尾 `// 注释` 压成一行后会把后面的代码全吞掉 → 先把 `;`/`{` 之后的行尾注释改成块注释；
+    2. JS 的"自动分号插入(ASI)"会失效——上一行以 `)`/`}`/标识符结尾、下一行以 `(`/`[`/`+`/`-`
+       开头时，两行会被连成一次函数调用/下标访问，直接语法报错。这里检测并补分号。
     """
     lines = []
     for line in js.split("\n"):
         s = line.strip()
         if not s or s.startswith("//"):
             continue
+        m = re.match(r"^(.*?[{;])\s*//\s*(.+)$", s)
+        if m and "*/" not in m.group(2):
+            s = m.group(1) + "  /* " + m.group(2).strip() + " */"
         lines.append(s)
 
     out = []
@@ -380,8 +611,8 @@ def build_bookmarklet() -> str:
 
 def save_bookmarklet(path: str = None) -> str:
     path = path or os.path.join(config.PROJECT_ROOT, "采集书签.txt")
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(build_bookmarklet() + "\n")
+    content = build_bookmarklet()             # 先完整生成，再落盘
+    _atomic_write(path, content + "\n")
     return path
 
 
