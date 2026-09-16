@@ -4,11 +4,14 @@
 import csv
 import datetime
 import os
+import re
 
 import pandas as pd
 import streamlit as st
 
 from ihub import config, db
+
+ROOT_APP = config.PROJECT_ROOT
 from ihub.crawlers import CRAWLERS
 
 OUT_DIR = os.path.join(config.PROJECT_ROOT, "投递文件")
@@ -63,6 +66,18 @@ def gen_resume_for(job, jd_text=None):
     safe = resume.safe_name(str(job.get("company") or "") + "_" + str(job.get("title") or ""))
     path = os.path.join(OUT_DIR, f"{safe}_简历.docx")
     return resume.build_docx(job, path, jd_text=jd_text)
+
+
+def _download_file(path, label, mime):
+    """存在才显示下载按钮；不存在就提示怎么生成。"""
+    if not os.path.exists(path):
+        st.button(label + "（未生成）", disabled=True, key="miss_" + os.path.basename(path))
+        st.caption("先跑一次：`venv\\Scripts\\python.exe gen_resume_kit.py`")
+        return
+    with open(path, "rb") as f:
+        data = f.read()
+    st.download_button(label, data=data, file_name=os.path.basename(path), mime=mime,
+                       key="dl_" + os.path.basename(path))
 
 
 def main():
@@ -132,9 +147,9 @@ def main():
         st.warning(f"已标记 {s['fake']} 条疑似风险岗位，可在侧边栏勾选“只看风险标记”核对。")
 
     (tab1, tab2, tab3, tab4, tab5, tab6,
-     tab7, tab8, tab9) = st.tabs(
+     tab7, tab8, tab9, tab10) = st.tabs(
         ["岗位列表", "🏆 为你推荐", "🎯 投递工作台", "我的收藏", "👤 我的资料", "📮 网申跟踪",
-         "🛰 秋招渠道", "📚 备考方案", "说明与合规"])
+         "🛰 秋招渠道", "📚 备考方案", "📝 简历定制", "说明与合规"])
 
     # ============ 岗位列表 ============
     with tab1:
@@ -638,7 +653,120 @@ def main():
                 else:
                     st.warning("没解析出数据行：确认第一行是表头（列名如 岗位/公司/城市/链接），后面每行一条。")
 
+    # ============ 简历定制（粘贴 JD → 定向简历 + 网申文案） ============
+    with tab10:
+        from ihub import tailor as _tk
+        st.markdown("#### 📝 简历定制与网申文案")
+        st.caption("粘贴岗位 JD → 自动识别岗位方向 → 生成对应侧重的简历（docx / pdf）"
+                   "与网申各栏文案。全部在本机完成，不联网、不上传。")
+
+        with st.expander("🧰 配套工具下载（投递工作台 / 网申助手 / 速填卡 / 成品简历）"):
+            st.caption("投递工作台：单个 HTML 文件，双击就能用（粘贴 JD 出定向简历 + 批量广投清单）。"
+                       "网申助手：装到浏览器后，在网申页面一键填表。")
+            _tools = [
+                (os.path.join(ROOT_APP, "简历材料", "05_投递工作台.html"), "⬇ 投递工作台.html", "text/html"),
+                (os.path.join(ROOT_APP, "简历材料", "04_网申速填卡.txt"), "⬇ 网申速填卡.txt", "text/plain"),
+                (os.path.join(ROOT_APP, "网申助手.user.js"), "⬇ 网申助手.user.js", "text/javascript"),
+                (os.path.join(ROOT_APP, "网申书签.txt"), "⬇ 网申书签.txt（免装扩展）", "text/plain"),
+                (os.path.join(ROOT_APP, "简历材料", "02_万能通用版_罗广睿_中国民航大学.pdf"),
+                 "⬇ 万能通用版简历.pdf", "application/pdf"),
+                (os.path.join(ROOT_APP, "简历材料", "02_万能通用版_罗广睿_中国民航大学.docx"),
+                 "⬇ 万能通用版简历.docx",
+                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+            ]
+            _cols = st.columns(3)
+            for _i, (_p, _lb, _mime) in enumerate(_tools):
+                with _cols[_i % 3]:
+                    _download_file(_p, _lb, _mime)
+            st.caption("改完资料想重新生成整套材料：`venv\\Scripts\\python.exe gen_resume_kit.py`")
+
+        st.divider()
+        _box = db.query(apply_state=1, active_only=False, limit=200)
+        _pick_opts = ["（不用，下面手动填）"] + [
+            f'{r.get("company") or "（无公司名）"}｜{r.get("title") or ""}' for r in _box]
+        _pick = st.selectbox("① 从投递箱带一条（选填）", _pick_opts, key="tk_pick")
+
+        _c1, _c2 = st.columns(2)
+        _company = _c1.text_input("公司名称（选填，会写进简历的求职意向）", key="tk_co")
+        _jobtitle = _c2.text_input("岗位名称（选填）", key="tk_jt")
+        if _pick != _pick_opts[0]:
+            _co, _, _jt = _pick.partition("｜")
+            _company = _company or _co.strip()
+            _jobtitle = _jobtitle or _jt.strip()
+
+        _jd = st.text_area("② 岗位 JD / 任职要求（整段粘贴，越全越准）", height=170, key="tk_jd")
+
+        if not (_jd.strip() or _jobtitle.strip()):
+            st.info("把岗位 JD 或岗位名称填进来，下面就会出现「方向识别 → 匹配度 → 定向简历 → 网申文案」。")
+        else:
+            _det, _scores, _weak = _tk.detect(_jd, _jobtitle)
+            st.markdown("##### ③ 岗位方向")
+            _labels = ["🤖 智能识别 → " + _tk.label_of(_det)] + [_tk.label_of(k) for k in _tk.ORDER] + ["🧩 万能通用版"]
+            _keys = [_det] + list(_tk.ORDER) + ["universal"]
+            _idx = st.radio("识别错了就点正确的那一个", range(len(_labels)),
+                            format_func=lambda i: _labels[i], horizontal=True, key="tk_dir")
+            _key = _keys[_idx]
+            _ctx = {"company": _company, "title": _jobtitle}
+            if _weak:
+                st.caption("JD 里技术关键词不多，已默认按技术向处理；可手动改。")
+
+            _an = _tk.analyze(_jd + " " + _jobtitle, _key)
+            _m1, _m2 = st.columns([1, 4])
+            with _m1:
+                st.metric("匹配度", f'{_an["score"]} 分', help="综合 JD 关键词覆盖率与该方向核心词命中率估算")
+            with _m2:
+                st.caption("✅ 简历里已覆盖：" + ("、".join(_an["hit"]) or "—"))
+                if _an["miss"]:
+                    st.caption("⚠️ JD 提到、简历未体现（面试会被追问，**不要硬编**）："
+                               + "、".join(_an["miss"][:15]))
+
+            st.markdown("##### ④ 定向简历")
+            if st.button("🛠 生成这份岗位的定向简历", type="primary", key="tk_gen"):
+                _stem = (str(_company) + "_" + str(_jobtitle)).strip("_") or _tk.file_of(_key)
+                _stem = re.sub(r'[\\/:*?"<>|\s]+', "_", _stem)[:50]
+                os.makedirs(OUT_DIR, exist_ok=True)
+                _dpath = os.path.join(OUT_DIR, f"{_stem}_简历.docx")
+                _ppath = os.path.join(OUT_DIR, f"{_stem}_简历.pdf")
+                _tk.resume_docx(_key, _dpath, _ctx)
+                try:
+                    _tk.build_pdf(_key, _ppath, _ctx)
+                except Exception as _e:                     # 缺 reportlab / 字体时降级
+                    _ppath = None
+                    st.warning(f"PDF 未生成（{_e}）——docx 已就绪，可直接上传或用 Word 另存为 PDF。")
+                st.session_state["tk_made"] = {"docx": _dpath, "pdf": _ppath, "key": _key}
+
+            _made = st.session_state.get("tk_made")
+            if _made and _made.get("key") == _key:
+                st.success(f"已生成：{os.path.relpath(_made['docx'], ROOT_APP)}")
+                _d1, _d2 = st.columns(2)
+                _download_file(_d1, _made["docx"], "⬇ 下载 Word（.docx）",
+                               "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                if _made.get("pdf"):
+                    _download_file(_d2, _made["pdf"], "⬇ 下载 PDF（上传网申用）", "application/pdf")
+            else:
+                st.caption("生成的文件会放到 投递文件/ 文件夹，同时在这里给出下载按钮。")
+
+            st.markdown("##### ⑤ 网申填写文案")
+            st.caption("点每块右上角的复制图标 → 直接粘进网申表单对应的框。")
+            _pack = _tk.fill_pack(_key, _ctx)
+            _short = [x for x in _pack if len(x[1]) < 60]
+            _long = [x for x in _pack if len(x[1]) >= 60]
+            _pcols = st.columns(2)
+            for _i, (_lb, _txt) in enumerate(_short):
+                with _pcols[_i % 2]:
+                    st.caption(_lb)
+                    st.code(_txt or "（未填）", language=None)
+            for _lb, _txt in _long:
+                with st.expander(f"📋 {_lb}"):
+                    st.code(_txt, language=None)
+
+            _all_txt = "\n\n".join(f"【{_lb}】\n{_txt}" for _lb, _txt in _pack)
+            st.download_button("⬇ 下载本岗位全部文案（txt）", data=_all_txt.encode("utf-8"),
+                               file_name=f"网申文案_{_tk.file_of(_key)}.txt", mime="text/plain",
+                               key="tk_dl_all")
+
     # ============ 说明 ============
+
     with tab9:
         st.markdown("#### 使用说明")
         st.markdown(

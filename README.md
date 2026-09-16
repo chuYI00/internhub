@@ -19,6 +19,8 @@
 - **时间**：每条岗位显示 **收录时间**；可选抓详情页 **截止日期**，已截止自动标红
 - **收藏 / 投递箱**：勾选 ⭐ 收藏；勾选 🎯 进投递工作台
 - **🎯 投递工作台**：逐条自动生成**投递理由/开场白** + **按岗位方向定制的简历（docx）**（新媒体 / 产品 / AI / 硬件 / 软开等方向自动识别并调整求职意向与匹配亮点），导出投递清单 CSV，标记“已投”
+- **📝 简历定制**：粘一段 JD → 自动识别岗位方向（9 套）→ 给出**匹配度 + 命中/未体现的关键词** → 生成该方向的**单页定向简历（docx / pdf）** + 20 项**网申填写文案**（一键复制）
+- **🤖 网申自动填表**：`网申助手.user.js`（油猴）按岗位方向一键填 40 类字段，含下拉/单选/日期/富文本/iframe；装不上扩展可用 `网申书签.txt`
 - **其他来源**：`run_import.py` CSV 导入（参考 `示例_导入模板.csv`），适合把官网 / 群文件 / Excel 整理的岗位导进来
 - **真实性过滤**：规则层自动标记“付费内推 / 培训费 / 押金”类风险岗位
 - **合规**：robots 检查、限速、低频、保留原始链接；页面常驻免责声明
@@ -72,7 +74,8 @@ python run_import.py 你的岗位表.csv
 | 前端/UI | Streamlit |
 | 数据源 | 实习僧（Nuxt SSR 结构化解析 + DOM 备用） |
 | 存储 | SQLite（文件型，免部署） |
-| 文档生成 | python-docx（按岗位定制简历） |
+| 文档生成 | python-docx + reportlab（单页定向简历，docx / pdf） |
+| 浏览器自动化 | Tampermonkey 用户脚本 v3（本人点击触发，不代登录/不代提交） |
 | 任务调度 | 自带 `scheduler.py`（或 GitHub Actions / cron） |
 
 ```
@@ -95,7 +98,8 @@ intern_tool/
 ├─ run_crawl.py          # 命令行抓取（--cities 城市 --pages 页 --enrich N）
 ├─ run_import.py         # CSV 导入其他来源
 ├─ scheduler.py          # 定时自动抓取
-├─ 启动网页.bat / 抓取数据.bat   # Windows 一键启动
+├─ gen_resume_kit.py     # 一键重新生成全部简历材料
+├─ 启动网页.bat / 抓取数据.bat / 生成简历材料.bat
 ├─ 示例_导入模板.csv
 ├─ requirements.txt
 ├─ ihub/
@@ -103,10 +107,18 @@ intern_tool/
 │  ├─ db.py              # SQLite：建表/迁移/去重/查询/收藏/投递状态
 │  ├─ filters.py         # 虚假岗位规则过滤
 │  ├─ resume.py          # 按岗位生成投递理由 + 定制简历 docx
+│  ├─ tailor.py          # 岗位方向识别 / 匹配分析 / 单页定向简历 / 网申文案
+│  ├─ autofill.py        # 生成网申助手.user.js + 网申书签.txt（v3 多方向）
+│  ├─ workbench.tpl.html # 投递工作台网页模板（注入资料后输出）
+│  ├─ md2docx.py         # Markdown → docx（报告/说明用）
 │  └─ crawlers/
 │     ├─ base.py         # 爬虫基类（robots、限速）
 │     └─ shixiseng.py    # 实习僧解析 + 详情截止时间
-└─ data/jobs.db          # 运行时生成（不入库）
+├─ 简历材料/             # 成品：万能版 + 8 个方向简历 / 工作台 / 速填卡 / 报告
+├─ 投递文件/             # 运行时生成：按岗位定制的简历
+├─ data/
+│  ├─ jobs.db            # 运行时生成（不入库）
+│  └─ resume_kit.json    # 简历内容源（改完跑 gen_resume_kit.py）
 ```
 
 ---

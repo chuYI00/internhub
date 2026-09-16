@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""网页冒烟测试：用 Streamlit 官方 AppTest 无头跑一遍 app.py，确认 9 个页签都能渲染、
+"""网页冒烟测试：用 Streamlit 官方 AppTest 无头跑一遍 app.py，确认 10 个页签都能渲染、
 关键按钮都在、没有异常。
 
 跑的是**临时数据库副本**，不会动你的真实 data/jobs.db（只有点了写按钮才会写，本测试不点写按钮）。
@@ -49,10 +49,11 @@ def main() -> int:
 
     print("[1] 首页渲染")
     check("app.py 无异常", not at.exception, [e.value for e in at.exception])
-    check("有 9 个页签", len(at.tabs) == 9, len(at.tabs))
+    check("有 10 个页签", len(at.tabs) == 10, len(at.tabs))
     tab_labels = [t.label for t in at.tabs]
     check("『备考方案』页签存在", any("备考" in x for x in tab_labels), tab_labels)
-    check("『网申跟踪』页签存在", any("网申" in x for x in tab_labels), tab_labels)
+    check("『网申跟踪』页签存在", any("网申跟踪" in x for x in tab_labels), tab_labels)
+    check("『简历定制』页签存在", any("简历定制" in x for x in tab_labels), tab_labels)
 
     print("[2] 广投批量按钮")
     keys = [b.key for b in at.button]

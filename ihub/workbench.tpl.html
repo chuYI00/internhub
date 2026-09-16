@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>投递工作台 · 罗广睿</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --card:#ffffff; --line:#e2e8f0; --ink:#1f2937; --ink2:#4b5563;
+    --grey:#94a3b8; --accent:#1F4E79; --accent2:#2f6fa8; --ok:#15803d; --warn:#b45309;
+    --soft:#f8fafc; --chip:#eef4fa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.65 "Microsoft YaHei","PingFang SC",-apple-system,"Segoe UI",sans-serif;}
+  .wrap{max-width:1180px;margin:0 auto;padding:22px 18px 60px}
+  header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+  h1{font-size:22px;margin:0;color:var(--accent);letter-spacing:.5px}
+  .sub{color:var(--grey);font-size:12.5px;margin-top:4px}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{padding:8px 15px;border:1px solid var(--line);background:#fff;border-radius:999px;
+    cursor:pointer;font-size:13px;color:var(--ink2);transition:.15s}
+  .tab:hover{border-color:#bcd2e8}
+  .tab.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .panel{display:none}
+  .panel.on{display:block}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px;
+    box-shadow:0 1px 2px rgba(16,24,40,.04)}
+  .card h2{font-size:15px;margin:0 0 10px;color:var(--accent);display:flex;align-items:center;gap:8px}
+  .card h2 small{font-weight:400;color:var(--grey);font-size:12px}
+  textarea,input[type=text]{width:100%;border:1px solid var(--line);border-radius:9px;padding:10px 12px;
+    font:13px/1.6 "Microsoft YaHei",monospace;background:var(--soft);color:var(--ink);resize:vertical}
+  textarea:focus,input:focus{outline:2px solid #cfe2f5;border-color:#9dc0e0;background:#fff}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .row>*{min-width:0}
+  .grow{flex:1}
+  button{font:13px "Microsoft YaHei",sans-serif;padding:8px 14px;border-radius:8px;cursor:pointer;
+    border:1px solid var(--line);background:#fff;color:var(--ink2);transition:.15s}
+  button:hover{border-color:#bcd2e8;background:#fbfdff}
+  button.pri{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  button.pri:hover{background:var(--accent2)}
+  button.gho{background:transparent}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:900px){.grid2{grid-template-columns:1fr}}
+  .kv{display:grid;grid-template-columns:96px 1fr;gap:2px 10px;font-size:13px}
+  .kv dt{color:var(--grey)}
+  .kv dd{margin:0}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+  .chip{background:var(--chip);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:12px}
+  .chip.miss{background:#fef6e7;color:var(--warn)}
+  .chip.hit{background:#eaf6ee;color:var(--ok)}
+  .bar{height:8px;background:#eef2f6;border-radius:99px;overflow:hidden;margin:6px 0 2px}
+  .bar>i{display:block;height:100%;background:linear-gradient(90deg,#2f6fa8,#15803d)}
+  .fw{width:100%;display:flex;gap:6px;align-items:flex-start;margin:6px 0}
+  .fw .t{flex:1;background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:8px 10px;
+    font-size:12.8px;white-space:pre-wrap;word-break:break-word;max-height:230px;overflow:auto}
+  .fw .lb{flex:0 0 82px;color:var(--grey);font-size:12px;padding-top:9px}
+  .fw button{flex:0 0 auto;padding:6px 10px;font-size:12px}
+  .note{font-size:12px;color:var(--grey);line-height:1.7}
+  .warnbox{background:#fff8e6;border:1px solid #f3dfae;border-radius:10px;padding:10px 13px;font-size:12.8px;color:#7c5b12}
+  .okbox{background:#effaf3;border:1px solid #bfe6cd;border-radius:10px;padding:10px 13px;font-size:12.8px;color:#155e35}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
+  th{color:var(--grey);font-weight:500;font-size:12px}
+  .dirbtn{padding:7px 12px;border-radius:8px}
+  .dirbtn.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+  .flex-line{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+  code{background:#eef2f6;border-radius:5px;padding:1px 5px;font-size:12.5px}
+  a{color:var(--accent2)}
+  .hint{color:var(--grey);font-size:12px}
+  .steps{counter-reset:s;list-style:none;padding:0;margin:6px 0}
+  .steps li{counter-increment:s;position:relative;padding-left:26px;margin:5px 0;font-size:13px}
+  .steps li::before{content:counter(s);position:absolute;left:0;top:1px;width:18px;height:18px;border-radius:50%;
+    background:var(--accent);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center}
+  /* ============ 简历预览 / 打印 ============ */
+  #cvBox{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px 20px;
+    font-size:13px;line-height:1.62;color:#262626;box-shadow:0 1px 3px rgba(16,24,40,.06)}
+  #cvBox .cv-name{font-size:21px;font-weight:700;color:#1F4E79;text-align:center;letter-spacing:2px}
+  #cvBox .cv-meta{text-align:center;color:#6b6b6b;font-size:12px;margin-top:3px}
+  #cvBox .cv-intent{text-align:center;font-size:13px;margin:7px 0 4px}
+  #cvBox .cv-intent b{color:#1F4E79}
+  #cvBox h3{font-size:13.5px;color:#1F4E79;border-bottom:1px solid #afc7de;padding-bottom:2px;
+    margin:12px 0 5px}
+  #cvBox ul{margin:0;padding-left:17px}
+  #cvBox li{margin:1.5px 0}
+  #cvBox .h{display:flex;justify-content:space-between;gap:10px;margin-top:6px;font-weight:600}
+  #cvBox .h span:last-child{font-weight:400;color:#6b6b6b;font-size:12px;white-space:nowrap}
+  #cvBox .h .sub{font-weight:400;color:#6b6b6b;font-size:12px}
+  #cvBox p{margin:4px 0}
+  #cvBox .foot{text-align:center;color:#94a3b8;font-size:11px;margin-top:8px}
+  #printRoot{display:none}
+  @media print{
+    body{background:#fff}
+    body>*{display:none !important}
+    #printRoot{display:block !important;padding:0;margin:0}
+    @page{size:A4;margin:11mm 16mm 9mm}
+    #printRoot .cv-name{font-size:19pt}
+    #printRoot{font-size:9pt;line-height:1.5}
+    #printRoot h3{font-size:11pt}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>投递工作台</h1>
+      <div class="sub">罗广睿 · 中国民航大学 电子信息与自动化学院 物联网工程 · 2027 届　|　粘贴 JD → 自动识别方向 → 生成定向简历与网申文案</div>
+    </div>
+    <div class="hint" id="saveHint">资料自动保存在本机浏览器</div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab on" data-p="p1">① 定制简历 + 网申文案</div>
+    <div class="tab" data-p="p2">② 网申速填卡</div>
+    <div class="tab" data-p="p3">③ 批量广投</div>
+    <div class="tab" data-p="p4">④ 助手 / 设置</div>
+  </div>
+
+  <!-- ==================== ① 定制 ==================== -->
+  <div class="panel on" id="p1">
+    <div class="card">
+      <h2>1. 把岗位 JD 粘进来 <small>公司、岗位名、岗位职责、任职要求——有多少粘多少</small></h2>
+      <div class="row" style="margin-bottom:8px">
+        <input type="text" id="co" class="grow" placeholder="公司名称（选填，如：华为 / 云南中烟）">
+        <input type="text" id="jt" class="grow" placeholder="岗位名称（选填，如：嵌入式软件开发工程师）">
+      </div>
+      <textarea id="jd" rows="7" placeholder="把招聘网站上的 JD 全文粘贴到这里……&#10;&#10;例如：&#10;【岗位职责】&#10;1. 负责物联网终端设备嵌入式软件设计与开发；&#10;2. 参与硬件方案评审，完成驱动调试与通信协议实现（UART/I2C/SPI/MQTT）；&#10;【任职要求】&#10;1. 本科及以上，电子信息/自动化/计算机相关专业；&#10;2. 熟悉 C 语言与 STM32 开发，了解 RTOS 者优先。"></textarea>
+      <div class="flex-line">
+        <button class="pri" id="btnGo">分析并生成</button>
+        <button class="gho" id="btnClear">清空</button>
+        <span class="hint">不联网，全部在本机完成</span>
+      </div>
+    </div>
+
+    <div class="card" id="dirCard" style="display:none">
+      <h2>2. 岗位方向识别 <small>识别错了就直接点正确的那一个</small></h2>
+      <div class="flex-line" id="dirBtns"></div>
+      <div id="dirWhy" class="note"></div>
+    </div>
+
+    <div class="card" id="anaCard" style="display:none">
+      <h2>3. 匹配度与关键词 <small>绿=简历里已有，橙=JD 要但你简历没体现（面试会被问，建议补）</small></h2>
+      <div id="scoreBox"></div>
+      <div style="margin-top:10px">
+        <div class="hint">JD 关键词命中</div>
+        <div class="chips" id="hitChips"></div>
+      </div>
+      <div style="margin-top:10px">
+        <div class="hint">JD 提到、简历未覆盖（诚实提示，不要硬编）</div>
+        <div class="chips" id="missChips"></div>
+      </div>
+    </div>
+
+    <div class="card" id="outCard" style="display:none">
+      <h2>4. 定向简历 <small>排版与 docx / pdf 版一致，导出可直接投</small></h2>
+      <div class="flex-line">
+        <button class="pri" id="btnPdf">🖨 导出 PDF（选择「另存为 PDF」）</button>
+        <button id="btnDoc">📄 导出 Word（.doc）</button>
+        <button id="btnMd">⬇ 导出 Markdown</button>
+        <button class="gho" id="btnTxt">⬇ 导出纯文本（贴简历框用）</button>
+      </div>
+      <div id="cvBox"></div>
+    </div>
+
+    <div class="card" id="fillCard" style="display:none">
+      <h2>5. 网申填写文案 <small>点「复制」→ 直接粘进网申表单对应框</small></h2>
+      <div id="fillBox"></div>
+    </div>
+  </div>
+
+  <!-- ==================== ② 速填卡 ==================== -->
+  <div class="panel" id="p2">
+    <div class="card">
+      <h2>网申速填卡 <small>不用分析 JD 也能用：这里是你所有信息的标准答案</small></h2>
+      <div class="flex-line">
+        <span class="hint">先选一套叙述口径：</span>
+        <span id="dirBtns2" class="flex-line" style="margin:0"></span>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="btnCopyAll">一键复制全部（纯文本）</button>
+        <button id="btnSaveTxt">下载为 txt</button>
+      </div>
+    </div>
+    <div class="card"><div id="quickBox"></div></div>
+  </div>
+
+  <!-- ==================== ③ 批量 ==================== -->
+  <div class="panel" id="p3">
+    <div class="card">
+      <h2>批量广投 <small>一行一个岗位，自动识别方向并生成对应文案</small></h2>
+      <div class="note" style="margin-bottom:6px">格式：<code>公司 | 岗位名称 | JD 或关键词（可省略）</code>　每行一条。只有公司+岗位也行，会按岗位关键词判断方向。</div>
+      <textarea id="batch" rows="8" placeholder="华为 | 嵌入式软件开发工程师 | 熟悉 C 语言、STM32、RTOS、UART&#10;云南中烟 | 信息化技术岗 | 计算机/电子信息相关专业，了解网络与数据库&#10;某科技公司 | 大模型应用开发实习生 | Python、LangChain、RAG、提示词"></textarea>
+      <div class="flex-line">
+        <button class="pri" id="btnBatch">生成投递清单</button>
+        <button id="btnCsv">⬇ 导出 CSV</button>
+        <button class="gho" id="btnBatchSample">填入示例</button>
+      </div>
+      <div id="batchOut" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <!-- ==================== ④ 助手 ==================== -->
+  <div class="panel" id="p4">
+    <div class="card">
+      <h2>网申助手（浏览器自动填表）<small>同目录 <code>网申助手.user.js</code></small></h2>
+      <ol class="steps">
+        <li>浏览器装 <b>Tampermonkey（油猴）</b> 扩展（Edge 扩展商店直接搜 Tampermonkey）。</li>
+        <li>把同目录的 <code>网申助手.user.js</code> <b>拖进浏览器窗口</b> → 点「安装」。（拖拽无效就用油猴「添加新脚本」粘贴）</li>
+        <li>打开任意网申页，右下角出现 <b>📝 网申助手</b> → 点开面板 → 上面选<b>岗位方向</b> → 点「填入空字段」 → 核对后自己提交。</li>
+        <li>装不上油猴：用同目录 <code>网申书签.txt</code>（书签栏新建书签，网址粘贴那一整行 javascript:）——能填普通表单，iframe 表单填不了。</li>
+      </ol>
+      <div class="warnbox">脚本只在你本人点击时工作：<b>不登录、不提交、不联网、不绕过验证码</b>。资料存在你本机浏览器里。</div>
+    </div>
+    <div class="card">
+      <h2>资料同步 <small>让助手用上你在本页改过的内容</small></h2>
+      <div class="row">
+        <button class="pri" id="btnExportJson">📋 导出资料 JSON（复制后粘进助手面板）</button>
+        <button id="btnImportJson">⬆ 从 JSON 导入</button>
+        <button class="gho" id="btnReset">恢复内置资料</button>
+      </div>
+      <textarea id="jsonBox" rows="6" style="margin-top:9px" placeholder="点「导出资料 JSON」后这里会出现内容；也可以把别处的 JSON 粘进来再点导入。"></textarea>
+    </div>
+    <div class="card">
+      <h2>资料编辑 <small>改完自动存本机，同时影响本页所有输出</small></h2>
+      <div class="grid2" id="editGrid"></div>
+    </div>
+  </div>
+</div>
+
+<div id="printRoot"></div>
+
+<script>
+/* ================= 数据 ================= */
+const DATA = /*__DATA__*/{};
+const P = DATA.profile, HL = DATA.highlights, SK = DATA.skills, PJ = DATA.projects,
+      PL = DATA.practiceLine, PR = DATA.practice, DIRS = DATA.directions, ORDER = DATA.order;
+
+/* ================= 本地覆盖存储 ================= */
+const LS = 'lgrui_workbench_v1';
+let OVER = {};
+try { OVER = JSON.parse(localStorage.getItem(LS) || '{}') || {}; } catch (e) { OVER = {}; }
+function saveOver(){ try{ localStorage.setItem(LS, JSON.stringify(OVER)); }catch(e){} }
+function prof(k){ return (k in OVER) ? OVER[k] : P[k]; }
+function overCount(){ return Object.keys(OVER).length; }
+/* 动态派生文案：资料改了，简历与文案跟着变 */
+function eduLine(){
+  return [prof('school'), prof('college'), prof('major')].filter(Boolean).join(' · ') +
+         '（' + prof('degree') + '在读） · 2027 届';
+}
+function eduBullets(){
+  return [
+    'GPA ' + prof('gpa') + '，无挂科；连续三年获校级“人民奖学金”（2023–2026 学年）',
+    '英语：' + prof('english') + '，可无障碍阅读英文技术文档与器件 datasheet',
+    '主修课程：' + DATA.courses + '；操作系统、数据结构与算法、数据库系统原理'
+  ];
+}
+
+/* ================= 方向识别词表 ================= */
+const DIRKEYS = {
+  hw:  ['嵌入式','单片机','mcu','stm32','freertos','rtos','固件','驱动','bsp','硬件','电子工程','pcb','电路','射频','传感器','c语言','c/c++','arm','i2c','spi','uart','can','电气工程','器件','datasheet'],
+  iot: ['物联网','iot','mqtt','智能硬件','传感网','华为云','设备接入','nb-iot','lora','zigbee','coap','边缘计算','智能家居','智慧','端到端','网关'],
+  ai:  ['人工智能','大模型','llm','算法','langchain','rag','智能体','agent','prompt','提示词','nlp','机器学习','深度学习','aigc','模型','向量','chatgpt','pytorch','tensorflow','知识库'],
+  auto:['自动化','控制','机器人','ros','运动控制','plc','伺服','产线','调试','系统集成','导航','slam','运动规划','机电','设备工程','电气'],
+  test:['测试','qa','质量管理','运维','技术支持','售后','实施','it支持','系统维护','网络管理','故障','排障','客服工程','驻场'],
+  aviation:['民航','航空','机场','空管','航司','运输','国企','事业单位','烟草','电力','铁路','政府','集团','局','航道','通航'],
+  prod:['产品经理','解决方案','售前','需求分析','项目经理','技术支持','实施顾问','产品设计','用户研究','brd','prd','商业化'],
+  media:['运营','新媒体','内容','短视频','直播','剪辑','编导','文案','市场','品牌','营销','社群','编辑','账号','视频','图文','增长','投放']
+};
+const VOCAB = ['物联网','嵌入式','单片机','硬件','电子','通信','计算机','软件','测试','数据','数据库','算法','人工智能','大模型','机器学习','网络','运维','技术支持','产品','数据分析','数据采集','接口','脚本','提示词','需求','文档','项目管理','系统','自动化','电气','控制','云计算','前端','后端','小程序','安全','民航','机场','Python','C++','C语言','Java','SQL','Excel','Linux','Git','MQTT','Docker','STM32','OpenHarmony','ROS','SQLite','Streamlit','LangChain','Figma','沟通','协作','抗压','责任心','学习能力','执行','逻辑','细心','服务意识','运营','视频','剪辑','设计','市场'];
+
+/* ================= 工具 ================= */
+const $ = s => document.querySelector(s);
+const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function copy(text, btn){
+  const done = ()=>{ if(btn){const t=btn.textContent; btn.textContent='✅ 已复制'; setTimeout(()=>btn.textContent=t,1200);} };
+  if (navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(text).then(done).catch(()=>fallback(text,done));
+  } else fallback(text, done);
+}
+function fallback(text, cb){
+  const ta=document.createElement('textarea'); ta.value=text;
+  ta.style.position='fixed'; ta.style.left='-9999px'; document.body.appendChild(ta);
+  ta.select(); try{document.execCommand('copy'); cb&&cb();}catch(e){alert('复制失败，请手动选中复制');}
+  document.body.removeChild(ta);
+}
+function download(name, text, mime){
+  const b = new Blob(['\ufeff'+text], {type:(mime||'text/plain')+';charset=utf-8'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();}, 400);
+}
+function safe(s){ return String(s||'').replace(/[\\/:*?"<>|\s]+/g,'_').slice(0,40) || 'job'; }
+
+/* ================= 方向识别 ================= */
+function detect(text, title){
+  const t = String(text||'').toLowerCase(), tt = String(title||'').toLowerCase();
+  const sc = {};
+  ORDER.forEach(k=>{
+    let s = 0;
+    DIRKEYS[k].forEach(w=>{
+      const n = (t.split(w).length-1);
+      if (n) s += Math.min(n,4) * (w.length>3?2:1);
+      if (tt && tt.indexOf(w) >= 0) s += 6;        // 岗位名里出现，权重高
+    });
+    sc[k] = s;
+  });
+  let best = 'ai', bv = -1;
+  ORDER.forEach(k=>{ if (sc[k] > bv){ bv = sc[k]; best = k; } });
+  if (bv <= 0) best = 'ai';                         // 没线索时给技术向默认
+  return {key: best, scores: sc, weak: bv <= 0};
+}
+
+/* ================= 匹配分析 ================= */
+function profileCorpus(){
+  const parts = [prof('intent'), prof('gpa'), prof('english'), prof('major'), prof('college'), DATA.courses,
+                 eduBullets().join(' '), DATA.honors.join(' '),
+                 Object.values(HL).join(' '), Object.values(SK).join(' '),
+                 Object.values(PR).map(x=>x.desc).join(' ')];
+  Object.values(PJ).forEach(p=>{ parts.push(p.title, p.role, p.bullets.join(' ')); });
+  Object.values(DIRS).forEach(d=>{ parts.push(d.intent, d.selfeval); });
+  parts.push(DATA.universal.selfeval);
+  return parts.join(' ').toLowerCase();
+}
+function analyze(jd, dirKey){
+  const text = String(jd||'');
+  const low = text.toLowerCase();
+  const terms = [];
+  VOCAB.forEach(v=>{ if (low.indexOf(v.toLowerCase()) >= 0) terms.push(v); });
+  (text.match(/[A-Za-z][A-Za-z0-9+#./\-]{1,16}/g) || []).forEach(x=>terms.push(x));
+  const seen = new Set(), list = [];
+  terms.forEach(t=>{ const k=t.toLowerCase(); if(!seen.has(k) && k.length>1){ seen.add(k); list.push(t);} });
+  const mine = profileCorpus();
+  const hit = [], miss = [];
+  list.forEach(t=>{ (mine.indexOf(t.toLowerCase())>=0 ? hit : miss).push(t); });
+  // 匹配度：方向相关词的命中权重更高
+  const d = DIRS[dirKey] || DATA.universal;
+  const dirHit = ORDER.length ? DIRKEYS[dirKey].filter(w=>low.indexOf(w)>=0) : [];
+  const dirCovered = dirHit.filter(w=>mine.indexOf(w)>=0);
+  const base = list.length ? hit.length / list.length : 0.5;
+  const bonus = dirHit.length ? (dirCovered.length / dirHit.length) : base;
+  let score = Math.round((base*0.45 + bonus*0.55) * 100);
+  score = Math.max(35, Math.min(96, score));
+  return {hit, miss, score, dirHit, dirCovered};
+}
+
+/* ================= 简历渲染 ================= */
+function resumeData(dirKey){
+  return dirKey === 'universal' ? DATA.universal : DIRS[dirKey];
+}
+function resumeParts(dirKey, ctx){
+  const d = resumeData(dirKey);
+  const intent = ctx && (ctx.title || ctx.company)
+      ? ('应聘 ' + [ctx.title, ctx.company].filter(Boolean).join(' · ') + '　|　' + d.intent)
+      : d.intent;
+  return { d, intent };
+}
+function mdResume(dirKey, ctx){
+  const {d, intent} = resumeParts(dirKey, ctx);
+  const L = [];
+  L.push('# ' + prof('name'));
+  L.push([prof('gender'), prof('political'), prof('birth'), prof('hometown')].join('　|　'));
+  L.push([prof('phone'), prof('email'), prof('city')].join('　|　'));
+  L.push(eduLine());
+  L.push('**求职意向：' + intent + '**');
+  L.push('');
+  L.push('## 核心亮点');
+  d.highlights.forEach(k=>L.push('- ' + HL[k]));
+  L.push('');
+  L.push('## 教育背景');
+  L.push('**' + prof('school') + '　' + prof('college') + '**　2023.09 – 2027.06');
+  L.push(prof('major') + '（' + prof('degree') + '，工学学士）　专业方向：电子信息与智能系统　2027 届');
+  eduBullets().forEach(b=>L.push('- ' + b));
+  L.push('');
+  L.push('## 专业技能');
+  d.skill_order.forEach(k=>L.push('- ' + SK[k]));
+  L.push('');
+  L.push('## 项目经历');
+  Object.keys(d.projects).forEach(k=>{
+    const p = PJ[k], xs = d.projects[k];
+    const bs = xs ? xs.map(i=>p.bullets[i]) : p.bullets;
+    L.push('**' + p.title + '｜' + p.role + '**　' + p.time);
+    bs.forEach(b=>L.push('- ' + b));
+    L.push('');
+  });
+  L.push('## 实践与校园经历');
+  d.practice.forEach(k=>L.push('- ' + PL[k]));
+  L.push('');
+  L.push('## 荣誉与证书');
+  DATA.honors.forEach(b=>L.push('- ' + b));
+  L.push('');
+  L.push('## 自我评价');
+  L.push(d.selfeval);
+  L.push('');
+  L.push('作品与代码：' + prof('github') + '（InternHub 工具源码，可核验）');
+  return L.join('\n');
+}
+function txtResume(dirKey, ctx){
+  return mdResume(dirKey, ctx).replace(/^#+\s*/gm,'').replace(/\*\*/g,'').replace(/^-\s/gm,'• ');
+}
+function htmlResume(dirKey, ctx){
+  const {d, intent} = resumeParts(dirKey, ctx);
+  const H = [];
+  H.push('<div class="cv-name">' + esc(prof('name')) + '</div>');
+  H.push('<div class="cv-meta">' + esc([prof('gender'),prof('political'),prof('birth'),prof('hometown')].join('　|　')) + '</div>');
+  H.push('<div class="cv-meta">' + esc([prof('phone'),prof('email'),prof('city')].join('　|　')) + '</div>');
+  H.push('<div class="cv-meta">' + esc(eduLine()) + '</div>');
+  H.push('<div class="cv-intent">求职意向：<b>' + esc(intent) + '</b></div>');
+  H.push('<h3>核心亮点</h3><ul>' + d.highlights.map(k=>'<li>'+esc(HL[k])+'</li>').join('') + '</ul>');
+  H.push('<h3>教育背景</h3>');
+  H.push('<div class="h"><span>' + esc(prof('school') + '　' + prof('college')) + '</span><span>2023.09 – 2027.06</span></div>');
+  H.push('<div class="h"><span class="sub">' + esc(prof('major') + '（' + prof('degree') + '，工学学士）　专业方向：电子信息与智能系统') + '</span><span>2027 届</span></div>');
+  H.push('<ul>' + eduBullets().map(b=>'<li>'+esc(b)+'</li>').join('') + '</ul>');
+  H.push('<h3>专业技能</h3><ul>' + d.skill_order.map(k=>'<li>'+esc(SK[k])+'</li>').join('') + '</ul>');
+  H.push('<h3>项目经历</h3>');
+  Object.keys(d.projects).forEach(k=>{
+    const p = PJ[k], xs = d.projects[k];
+    const bs = xs ? xs.map(i=>p.bullets[i]) : p.bullets;
+    H.push('<div class="h"><span>' + esc(p.title + '｜' + p.role) + '</span><span>' + esc(p.time) + '</span></div>');
+    H.push('<ul>' + bs.map(b=>'<li>'+esc(b)+'</li>').join('') + '</ul>');
+  });
+  H.push('<h3>实践与校园经历</h3><ul>' + d.practice.map(k=>'<li>'+esc(PL[k])+'</li>').join('') + '</ul>');
+  H.push('<h3>荣誉与证书</h3><ul>' + DATA.honors.map(b=>'<li>'+esc(b)+'</li>').join('') + '</ul>');
+  H.push('<h3>自我评价</h3><p>' + esc(d.selfeval) + '</p>');
+  H.push('<div class="foot">作品与代码：' + esc(prof('github')) + '（InternHub 工具源码，可核验）</div>');
+  return H.join('\n');
+}
+function docFile(dirKey, ctx){
+  const css = 'body{font-family:"微软雅黑";font-size:10.5pt;color:#262626;line-height:1.5}' +
+    'h3{font-size:12pt;color:#1F4E79;border-bottom:1px solid #afc7de;margin:12pt 0 5pt}' +
+    '.cv-name{font-size:19pt;font-weight:bold;color:#1F4E79;text-align:center}' +
+    '.cv-meta{text-align:center;color:#6b6b6b;font-size:9pt;margin-top:2pt}' +
+    '.cv-intent{text-align:center;margin:6pt 0}' +
+    'ul{margin:0;padding-left:16pt}li{margin:1pt 0}' +
+    '.h{display:flex;justify-content:space-between;font-weight:bold;margin-top:5pt}' +
+    '.h .sub{font-weight:normal;color:#6b6b6b;font-size:9pt}' +
+    '.foot{text-align:center;color:#94a3b8;font-size:8pt;margin-top:8pt}';
+  return '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">' +
+    '<head><meta charset="utf-8"><title>' + esc(prof('name')) + ' 简历</title><style>' + css + '</style></head>' +
+    '<body>' + htmlResume(dirKey, ctx) + '</body></html>';
+}
+
+/* ================= 网申填写文案 ================= */
+function fillPack(dirKey, ctx){
+  const {d, intent} = resumeParts(dirKey, ctx);
+  const co = ctx && ctx.company ? ctx.company : '';
+  const jt = ctx && ctx.title ? ctx.title : '';
+  const hlList = d.highlights.map(k=>HL[k]);
+  const expLines = [];
+  Object.keys(d.projects).forEach(k=>{
+    const p = PJ[k], xs = d.projects[k];
+    const bs = xs ? xs.map(i=>p.bullets[i]) : p.bullets;
+    expLines.push('【' + p.title + '】' + p.role + '　' + p.time + '\n' + bs.map(b=>'- '+b).join('\n'));
+  });
+  const reason = (co||jt)
+    ? ('您好！我是中国民航大学电子信息与自动化学院物联网工程专业 2027 届学生罗广睿，看到' +
+       (co?('贵公司（'+co+'）'):'贵司') + (jt?('正在招聘「'+jt+'」'):'的招聘信息') +
+       '，非常感兴趣并希望投递。我的匹配点：' + hlList[0] + '；' + hlList[1] +
+       '。学习能力强、动手经验多，能稳定实习/工作 2 个月以上（毕业后可长期）。简历详见附件，期待与您进一步沟通！')
+    : ('您好！我是中国民航大学电子信息与自动化学院物联网工程专业 2027 届学生罗广睿。我的匹配点：' +
+       hlList[0] + '；' + hlList[1] + '。期待进一步沟通！');
+  const shortIntro = '中国民航大学电子信息与自动化学院物联网工程 2027 届本科生，GPA 3.47/4.0 无挂科，' +
+    '连续三年校级人民奖学金，CET-4 与 CET-6（446 分）均已通过。' + hlList[0] + '。' + hlList[1] + '。';
+  return [
+    ['姓名', prof('name')],
+    ['性别 / 民族 / 政治面貌', prof('gender') + ' / ' + prof('nation') + ' / ' + prof('political')],
+    ['出生日期', prof('birth')],
+    ['手机 / 邮箱', prof('phone') + ' / ' + prof('email')],
+    ['现居地 / 籍贯', prof('city') + ' / ' + prof('hometown')],
+    ['学校名称', prof('school')],
+    ['学院 / 系别', prof('college')],
+    ['专业名称', prof('major')],
+    ['学历 / 学位', prof('degree') + '（工学学士，在读）'],
+    ['入学 / 毕业时间', '2023.09 / 2027.06'],
+    ['GPA', prof('gpa')],
+    ['外语水平', prof('english')],
+    ['求职意向', intent],
+    ['项目经历（可整段粘贴）', expLines.join('\n\n')],
+    ['技能特长', d.skill_order.map(k=>SK[k]).join('\n')],
+    ['获奖情况', DATA.honors.join('\n')],
+    ['实践经历', d.practice.map(k=>'【' + PR[k].company + '】' + PR[k].title + '　' + PR[k].time + '\n' + PR[k].desc).join('\n\n')],
+    ['自我评价（按此方向定制）', d.selfeval],
+    ['自我介绍（短版 80 字）', shortIntro],
+    ['申请理由 / 求职信', reason]
+  ];
+}
+
+/* ================= 界面 ================= */
+let curDir = 'auto', curCtx = null;
+
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click', ()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('on'));
+  t.classList.add('on'); $('#'+t.dataset.p).classList.add('on');
+}));
+
+function dirButtons(host, cb){
+  host.innerHTML = '';
+  const all = [['auto','智能识别'], ['universal','万能通用']].concat(ORDER.map(k=>[k, DIRS[k].label]));
+  all.forEach(([k,label])=>{
+    const b = document.createElement('button');
+    b.className = 'dirbtn' + (k===curDir?' on':'');
+    b.textContent = label;
+    b.onclick = ()=>{ curDir = k; cb(k); };
+    host.appendChild(b);
+  });
+}
+function refreshDirs(){
+  document.querySelectorAll('#dirBtns,#dirBtns2').forEach(h=>dirButtons(h, ()=>{
+    refreshDirs(); if ($('#outCard').style.display!=='none') renderOutputs();
+    renderQuick();
+  }));
+}
+
+function renderOutputs(){
+  const k = curDir === 'auto' ? lastAutoDir : curDir;
+  const useK = (k === 'universal') ? 'universal' : k;
+  const md = mdResume(useK, curCtx);
+  $('#cvBox').innerHTML = htmlResume(useK, curCtx);
+  $('#cvBox').dataset.dir = useK;
+  // 网申文案
+  const box = $('#fillBox'); box.innerHTML = '';
+  fillPack(useK, curCtx).forEach(([label, val])=>{
+    const w = document.createElement('div'); w.className = 'fw';
+    const lb = document.createElement('div'); lb.className='lb'; lb.textContent = label;
+    const t  = document.createElement('div'); t.className='t'; t.textContent = val;
+    const b  = document.createElement('button'); b.textContent='复制';
+    b.onclick = ()=>copy(val, b);
+    w.appendChild(lb); w.appendChild(t); w.appendChild(b);
+    box.appendChild(w);
+  });
+  $('#outCard').style.display='block'; $('#fillCard').style.display='block';
+}
+
+let lastAutoDir = 'ai', lastAna = null;
+$('#btnGo').onclick = ()=>{
+  const jd = $('#jd').value.trim(), jt = $('#jt').value.trim(), co = $('#co').value.trim();
+  if (!jd && !jt){ alert('至少把岗位名称或 JD 粘一点进来～'); return; }
+  const det = detect(jd, jt);
+  lastAutoDir = det.key;
+  const an = analyze(jd + ' ' + jt, det.key);
+  lastAna = an;
+  curCtx = {company: co, title: jt};
+  $('#co').value = co; $('#jt').value = jt;
+
+  // 方向卡
+  $('#dirCard').style.display = 'block';
+  if (curDir === 'auto' || !curDir) curDir = 'auto';
+  refreshDirs();
+  const rk = curDir==='auto' ? det.key : curDir;
+  $('#dirWhy').innerHTML = det.weak
+    ? 'JD 里技术关键词不多，已默认按 <b>' + DIRS[det.key].label + '</b> 处理，可手动改。'
+    : '识别为 <b>' + DIRS[det.key].label + '</b>' +
+      (det.scores[det.key] ? '（关键词得分 ' + det.scores[det.key] + '）' : '') +
+      '。得分：' + ORDER.filter(k=>det.scores[k]>0).map(k=>DIRS[k].label+' '+det.scores[k]).join('　') ;
+
+  // 分析卡
+  $('#anaCard').style.display='block';
+  $('#scoreBox').innerHTML =
+    '<div class="row"><b style="font-size:19px;color:var(--accent)">' + an.score + ' 分</b>' +
+    '<span class="hint">综合「JD 关键词覆盖率」与「该方向核心词命中率」估算，仅供参考</span></div>' +
+    '<div class="bar"><i style="width:' + an.score + '%"></i></div>';
+  $('#hitChips').innerHTML = an.hit.length
+    ? an.hit.map(t=>'<span class="chip hit">'+esc(t)+'</span>').join('') : '<span class="hint">未识别到明确关键词</span>';
+  $('#missChips').innerHTML = an.miss.length
+    ? an.miss.map(t=>'<span class="chip miss">'+esc(t)+'</span>').join('')
+    : '<span class="hint">没有明显缺口 👍</span>';
+
+  renderOutputs();
+  try { $('#outCard').scrollIntoView({behavior:'smooth', block:'start'}); } catch (e) {}
+};
+$('#btnClear').onclick = ()=>{ $('#jd').value=''; $('#jt').value=''; $('#co').value=''; };
+
+$('#btnPdf').onclick = ()=>{
+  const k = $('#cvBox').dataset.dir || curDir;
+  $('#printRoot').innerHTML = htmlResume(k, curCtx);
+  window.print();
+};
+$('#btnDoc').onclick = ()=>{
+  const k = $('#cvBox').dataset.dir || curDir;
+  const name = '简历_' + (curCtx && curCtx.company ? safe(curCtx.company)+'_' : '') +
+    (curCtx && curCtx.title ? safe(curCtx.title)+'_' : DIRS[k] ? DIRS[k].file+'_' : '通用版_') + '罗广睿.doc';
+  download(name, docFile(k, curCtx), 'application/msword');
+};
+$('#btnMd').onclick = ()=>{
+  const k = $('#cvBox').dataset.dir || curDir;
+  download('简历_' + safe(DIRS[k]?DIRS[k].file:'通用版') + '_罗广睿.md', mdResume(k, curCtx), 'text/markdown');
+};
+$('#btnTxt').onclick = ()=>{
+  const k = $('#cvBox').dataset.dir || curDir;
+  download('简历_纯文本_' + safe(DIRS[k]?DIRS[k].file:'通用版') + '.txt', txtResume(k, curCtx));
+};
+
+/* ---------- 速填卡 ---------- */
+function renderQuick(){
+  const k = (curDir==='auto'||curDir==='universal') ? curDir : curDir;
+  const useK = k==='auto' ? lastAutoDir : k;
+  const host = $('#quickBox'); host.innerHTML='';
+  const rows = fillPack(useK==='universal'?'universal':useK, null);
+  const kv = document.createElement('dl'); kv.className='kv';
+  rows.slice(0,13).forEach(([l,v])=>{
+    kv.innerHTML += '<dt>'+esc(l)+'</dt><dd>'+esc(v)+'</dd>';
+  });
+  host.appendChild(kv);
+  const rest = document.createElement('div');
+  rest.style.marginTop = '14px';
+  rest.innerHTML = '<h3 style="font-size:13.5px;color:var(--accent);border-bottom:1px solid #afc7de;padding-bottom:2px;margin:12px 0 6px">经历与文案（可整段粘贴）</h3>';
+  rows.slice(13).forEach(([l,v])=>{
+    const w = document.createElement('div'); w.className='fw';
+    const lb=document.createElement('div'); lb.className='lb'; lb.textContent=l;
+    const t=document.createElement('div'); t.className='t'; t.textContent=v;
+    const b=document.createElement('button'); b.textContent='复制'; b.onclick=()=>copy(v,b);
+    w.appendChild(lb); w.appendChild(t); w.appendChild(b); rest.appendChild(w);
+  });
+  host.appendChild(rest);
+}
+$('#btnCopyAll').onclick = ()=>{
+  const k = (curDir==='auto') ? lastAutoDir : curDir;
+  copy(fillPack(k, null).map(([l,v])=>'【'+l+'】\n'+v).join('\n\n'), $('#btnCopyAll'));
+};
+$('#btnSaveTxt').onclick = ()=>{
+  const k = (curDir==='auto') ? lastAutoDir : curDir;
+  download('网申速填卡_' + safe(DIRS[k]?DIRS[k].label:'通用') + '.txt',
+    fillPack(k, null).map(([l,v])=>'【'+l+'】\n'+v).join('\n\n'));
+};
+
+/* ---------- 批量 ---------- */
+let batchRows = [];
+$('#btnBatchSample').onclick = ()=>{
+  $('#batch').value = '华为 | 嵌入式软件开发工程师 | 负责 C 语言嵌入式开发，熟悉 STM32、RTOS、UART/SPI/I2C\n'
+    + '云南中烟工业有限责任公司 | 信息化技术岗 | 计算机、电子信息相关专业，了解网络、数据库、系统运维\n'
+    + '某科技有限公司 | 大模型应用开发实习生 | Python、LangChain、RAG、提示词工程、向量数据库\n'
+    + '某机场集团 | 智慧机场技术管理岗 | 民航相关专业优先，信息化项目管理、设备管理、数据分析';
+};
+$('#btnBatch').onclick = ()=>{
+  const lines = $('#batch').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  batchRows = lines.map(line=>{
+    const parts = line.split(/\s*[|｜\t]\s*/);
+    const co = (parts[0]||'').trim(), jt = (parts[1]||'').trim(), jd = (parts[2]||'').trim();
+    const det = detect(jd + ' ' + jt, jt);
+    const d = DIRS[det.key];
+    const an = analyze(jd + ' ' + jt, det.key);
+    return {co, jt, jd, dir: det.key, dirLabel: d.label, intent: d.intent, score: an.score,
+      hl: d.highlights.slice(0,2).map(k=>HL[k]).join('；'), reason: fillPack(det.key, {company:co, title:jt})[19][1]};
+  });
+  const host = $('#batchOut'); host.innerHTML='';
+  if (!batchRows.length){ host.innerHTML='<div class="hint">还没填内容。</div>'; return; }
+  let html = '<table><thead><tr><th>公司</th><th>岗位</th><th>识别方向</th><th>匹配</th><th>投递理由（可直接粘贴）</th><th></th></tr></thead><tbody>';
+  batchRows.forEach((r,i)=>{
+    html += '<tr><td>'+esc(r.co)+'</td><td>'+esc(r.jt)+'</td><td>'+esc(r.dirLabel)+'</td><td>'+r.score+
+      '</td><td class="hint" style="max-width:420px">'+esc(r.reason)+'</td>'+
+      '<td><button data-i="'+i+'" class="rc">复制理由</button><br><br><button data-i="'+i+'" class="rd">看简历</button></td></tr>';
+  });
+  html += '</tbody></table>';
+  host.innerHTML = html;
+  host.querySelectorAll('.rc').forEach(b=>b.onclick=()=>copy(batchRows[+b.dataset.i].reason, b));
+  host.querySelectorAll('.rd').forEach(b=>b.onclick=()=>{
+    const r = batchRows[+b.dataset.i];
+    curDir = r.dir; curCtx = {company:r.co, title:r.jt};
+    document.querySelector('.tab[data-p="p1"]').click();
+    $('#dirCard').style.display='block'; refreshDirs();
+    renderOutputs(); try { window.scrollTo({top:0,behavior:'smooth'}); } catch (e) {}
+  });
+};
+$('#btnCsv').onclick = ()=>{
+  if (!batchRows.length){ alert('先生成投递清单'); return; }
+  const head = ['公司','岗位','识别方向','匹配分','简历文件','投递理由','投递状态','投递日期','备注'];
+  const rows = batchRows.map(r=>[r.co, r.jt, r.dirLabel, r.score,
+    '简历_' + safe(r.co||'') + '_' + safe(r.jt||'') + '_罗广睿.pdf', r.reason, '未投', '', '']);
+  const csv = [head].concat(rows).map(r=>r.map(c=>'"'+String(c==null?'':c).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+  download('投递清单_' + new Date().toISOString().slice(0,10) + '.csv', csv, 'text/csv');
+};
+
+/* ---------- 资料编辑 / 同步 ---------- */
+const EDIT_FIELDS = [
+  ['name','姓名'],['gender','性别'],['birth','出生日期'],['political','政治面貌'],
+  ['phone','手机号'],['email','邮箱'],['city','现居地'],['hometown','籍贯'],
+  ['school','学校'],['college','学院'],['major','专业'],['degree','学历'],
+  ['gpa','GPA'],['english','外语水平'],['github','GitHub / 作品链接']
+];
+function renderEdit(){
+  const g = $('#editGrid'); g.innerHTML='';
+  EDIT_FIELDS.forEach(([k,label])=>{
+    const d = document.createElement('div');
+    d.innerHTML = '<div class="hint" style="margin-top:6px">'+label+(k in OVER?' *':'')+'</div>';
+    const i = document.createElement('input'); i.type='text'; i.value = prof(k)||'';
+    i.onchange = ()=>{
+      const v = i.value.trim();
+      if (v === (P[k]||'')) delete OVER[k]; else OVER[k] = v;
+      saveOver(); renderEdit(); refreshDirs(); renderQuick();
+      if ($('#outCard').style.display!=='none') renderOutputs();
+    };
+    d.appendChild(i); g.appendChild(d);
+  });
+  $('#saveHint').textContent = overCount() ? ('已在本机修改 ' + overCount() + ' 项') : '资料自动保存在本机浏览器';
+}
+$('#btnExportJson').onclick = ()=>{
+  const out = {};
+  EDIT_FIELDS.forEach(([k])=>{ out[k] = prof(k)||''; });
+  Object.assign(out, {
+    intent: curCtx && curCtx.title ? curCtx.title : DATA.universal.intent,
+    expected_city: '', expected_salary: '面议', available: '可按要求到岗',
+    self_eval: DIRS[curDir==='auto'?lastAutoDir:curDir].selfeval,
+    highlights: DIRS[curDir==='auto'?lastAutoDir:curDir].highlights.map(k=>HL[k]).join('\n'),
+    skills: DIRS[curDir==='auto'?lastAutoDir:curDir].skill_order.map(k=>SK[k]).join('\n'),
+    experiences: Object.values(PR).map(x=>x.company+'|'+x.title+'|'+x.time+'|'+x.desc).join('\n'),
+    certificates: DATA.honors.join('；'),
+    college: prof('college')
+  });
+  const s = JSON.stringify(out, null, 2);
+  $('#jsonBox').value = s;
+  copy(s, $('#btnExportJson'));
+};
+$('#btnImportJson').onclick = ()=>{
+  let obj = null;
+  try { obj = JSON.parse($('#jsonBox').value); } catch(e){ alert('JSON 格式不对：' + e.message); return; }
+  Object.keys(obj).forEach(k=>{ OVER[k] = obj[k]; });
+  saveOver(); renderEdit(); refreshDirs(); renderQuick();
+  if ($('#outCard').style.display!=='none') renderOutputs();
+  alert('已导入 ' + Object.keys(obj).length + ' 个字段');
+};
+$('#btnReset').onclick = ()=>{
+  if (!confirm('清空本机修改，恢复内置资料？')) return;
+  OVER = {}; saveOver(); renderEdit(); refreshDirs(); renderQuick();
+  if ($('#outCard').style.display!=='none') renderOutputs();
+};
+
+/* ---------- 启动 ---------- */
+refreshDirs(); renderEdit(); renderQuick();
+</script>
+</body>
+</html>
