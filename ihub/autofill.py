@@ -113,7 +113,7 @@ _TEMPLATE = r"""// ==UserScript==
     if (!el || !el.getBoundingClientRect) return true;
     try {
       var r = el.getBoundingClientRect();
-      if (r && r.width === 0 && r.height === 0) return false;   // 隐藏域/折叠区
+            if (r && r.width === 0 && r.height === 0) return false;  /* 隐藏域/折叠区 */
     } catch (e) {}
     return true;
   }
@@ -219,24 +219,24 @@ _TEMPLATE = r"""// ==UserScript==
     if (!w || !t) return false;
     if (w === t) return true;
     if (w.indexOf(t) >= 0 || t.indexOf(w) >= 0) return true;
-    if (w.length >= 2 && t.length >= 2 && w.slice(0, 2) === t.slice(0, 2)) return true;  // 云南大理 ↔ 云南省
+        if (w.length >= 2 && t.length >= 2 && w.slice(0, 2) === t.slice(0, 2)) return true;  /* 云南大理 ↔ 云南省 */
     return false;
   }
   function fillSelect(el, val) {
     var opts = Array.prototype.slice.call(el.options || []);
     if (!opts.length) return false;
     var hit = null, i;
-    for (i = 0; i < opts.length; i++) {                       // 1) 精确
+        for (i = 0; i < opts.length; i++) {  /* 1) 精确 */
       if (norm(opts[i].value) === norm(val) || norm(opts[i].textContent) === norm(val)) { hit = opts[i]; break; }
     }
-    if (!hit) for (i = 0; i < opts.length; i++) {              // 2) 互相包含/前两字相同
+        if (!hit) for (i = 0; i < opts.length; i++) {  /* 2) 互相包含/前两字相同 */
       if (looseMatch(val, opts[i].textContent) || looseMatch(val, opts[i].value)) { hit = opts[i]; break; }
     }
     if (!hit) return false;
     try { el.value = hit.value; } catch (e) {}
     if (el.value !== hit.value) { hit.selected = true; }
     if (el.selectedIndex >= 0 && el.options[el.selectedIndex] && norm(el.options[el.selectedIndex].textContent) !== norm(hit.textContent)) {
-      hit.selected = true;                                     // 有些框架要手动置 selected
+            hit.selected = true;  /* 有些框架要手动置 selected */
     }
     fire(el);
     return true;
@@ -336,6 +336,7 @@ _TEMPLATE = r"""// ==UserScript==
   }
 
   /* ==================== 跨 iframe ==================== */
+  // __BOOKMARK_CUT__ 书签版从这里截断（书签版没法往子框架注入脚本）
   var isTop = (function () { try { return window.top === window; } catch (e) { return false; } })();
   function broadcast(mode) {
     var msg = { __ihub: 'fill', mode: mode };
@@ -344,7 +345,7 @@ _TEMPLATE = r"""// ==UserScript==
   window.addEventListener('message', function (ev) {
     var d = ev.data;
     if (!d || d.__ihub !== 'fill') return;
-    if (ev.source === window) return;                 // 别理自己
+        if (ev.source === window) return;  /* 别理自己 */
     var st = fillDoc(document, d.mode);
     try {
       var up = isTop ? window : window.parent;
@@ -456,7 +457,7 @@ _TEMPLATE = r"""// ==UserScript==
 
   if (isTop) {
     ensureMounted();
-    setInterval(ensureMounted, 2500);          // SPA/前端框架会重渲染 body
+        setInterval(ensureMounted, 2500);  /* SPA/前端框架会重渲染 body */
   }
 
   // 调试/自测入口
@@ -486,5 +487,64 @@ def save_userscript(path: str = None, prof=None) -> str:
     return path
 
 
+BOOKMARK_NAME = "网申书签.txt"
+_BOOKMARK_HEAD = "javascript:"
+_BOOKMARK_TAIL = "go();})()"
+
+
+def _minify(js: str) -> str:
+    """压成一行（去掉整行注释/缩进，并在 ASI 会出问题处补分号）。"""
+    lines = []
+    for line in js.split("\n"):
+        s = line.strip()
+        if not s or s.startswith("//"):
+            continue
+        lines.append(s)
+    out = []
+    for i, s in enumerate(lines):
+        nxt = lines[i + 1] if i + 1 < len(lines) else ""
+        if nxt[:1] in ("(", "[", "+", "-") and not s.endswith(
+                (";", "{", "}", ",", "(", "[", ":", "=", "=>", "&&", "||", "?", "+", "-", "*", "/")):
+            s += ";"
+        out.append(s)
+    text = " ".join(out)
+    while "  " in text:
+        text = text.replace("  ", " ")
+    return text
+
+
+def build_bookmarklet(prof=None) -> str:
+    """从同一份源码生成书签版（免装扩展）：点书签即按「只填空字段」填一遍当前页。"""
+    js = build_js(prof)
+    idx = js.find("(function () {")
+    body = js[idx:]
+    sentinel = "// __BOOKMARK_CUT__"
+    cut = body.find(sentinel)
+    if cut < 0:
+        raise RuntimeError("网申脚本缺少 __BOOKMARK_CUT__ 哨兵，无法生成书签版")
+    body = body[:cut]
+    body = _minify(body)
+    for i in range(len(body) - 1):
+        if body[i:i + 2] == "//" and (i == 0 or body[i - 1] != ":"):
+            raise RuntimeError(
+                f"书签版源码里有会吞代码的 // 注释（位置 {i}）：{body[max(0, i - 60):i + 60]!r}")
+    boot = (
+        "function go(){try{var st=fillDoc(document,'empty');var m='网申助手（书签版）：已填 '+st.filled+' 个字段';"
+        "if(st.filled){m+='\\n'+st.report.slice(0,10).join('，');}"
+        "else{m+='\\n\\n没匹配到字段。若是 iframe 表单，书签版填不了，请用油猴版；"
+        "也可以先在页面滚动一下再点一次。';}"
+        "m+='\\n\\n请逐个核对后再提交。';alert(m);}catch(e){alert('网申助手出错：'+e.message);}}"
+    )
+    return _BOOKMARK_HEAD + body + boot + _BOOKMARK_TAIL
+
+
+def save_bookmarklet(path: str = None, prof=None) -> str:
+    path = path or os.path.join(config.PROJECT_ROOT, BOOKMARK_NAME)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(build_bookmarklet(prof) + "\n")
+    return path
+
+
 if __name__ == "__main__":
     print(save_userscript())
+    print(save_bookmarklet())

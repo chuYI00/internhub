@@ -246,5 +246,34 @@ function sandboxDoc(root) {
   return dom.makeDocument(root);
 }
 
+/* ---------- 12. 书签版（免装扩展）也能填 ---------- */
+console.log('[12] 网申书签（javascript: 免插件版）');
+{
+  const bmPath = path.join(__dirname, '..', '网申书签.txt');
+  if (!fs.existsSync(bmPath)) {
+    check('存在 网申书签.txt', false, bmPath);
+  } else {
+    let bm = fs.readFileSync(bmPath, 'utf8').trim();
+    check('以 javascript: 开头', bm.startsWith('javascript:'), bm.slice(0, 20));
+    bm = bm.slice('javascript:'.length);
+    const root = new El('body');
+    root.appendChild(labelTable([
+      ['姓名', input({})],
+      ['联系电话', input({})],
+      ['毕业院校', input({})],
+    ]));
+    const sandbox = buildSandbox(root, { confirm: () => true });
+    let threw = null;
+    try { vm.runInContext(bm, vm.createContext(sandbox), { filename: '网申书签' }); }
+    catch (e) { threw = e.message; }
+    const vals = root.descendants.filter(d => d.tagName === 'INPUT').map(d => d.value);
+    check('书签执行不报错', threw === null, threw);
+    check('书签版填上了姓名', vals[0] === '罗广睿', vals[0]);
+    check('书签版填上了电话', vals[1] === '13500135000', vals[1]);
+    check('书签版填上了学校', vals[2] === '中国民航大学', vals[2]);
+    check('弹出的提示里有"已填 3 个字段"', /已填 3 个字段/.test(String(sandbox.__alert)), sandbox.__alert);
+  }
+}
+
 console.log('\n结果: ' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);
