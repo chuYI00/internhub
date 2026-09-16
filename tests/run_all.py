@@ -54,7 +54,7 @@ def main() -> int:
         [PY, "tests/test_tobacco.py"], "烟草监控：只报增量 + 报名窗口倒计时")
     results["CSV 导入链路"] = run(
         [PY, "tests/test_import_csv.py"], "CSV 导入 → 入库")
-    results["网页端冒烟（12 个页签 + 广投按钮）"] = run(
+    results["网页端冒烟（4 个页签 + 页签对齐 + 广投按钮）"] = run(
         [PY, "tests/test_app_smoke.py"], "Streamlit 无头渲染")
     results["简历定制链路"] = run(
         [PY, "tests/test_tailor.py"], "简历定制（方向识别 + 单页排版 + 网页页签）")

@@ -115,8 +115,9 @@ def _download_file(path, label, mime, container=None):
 
 
 def main():
-    st.title("🧭 实习岗位聚合器 InternHub")
-    st.caption("聚合公开实习信息 · 投递材料按岗位定制 · 本地个人学习使用")
+    st.title("🎯 InternHub · 秋招工作台")
+    st.caption("**主线：看岗位 → 官方投递 → 网申填表 → 定制简历 → 备考目标单位**　|　"
+               "默认视图：**秋招 × 云南（昆明 / 大理）**　|　本地运行，资料不上传")
 
     db.init_db()
     db.backfill_official_urls()
@@ -155,10 +156,12 @@ def main():
         st.header("② 筛选")
         city_choices = list(dict.fromkeys(["全部"] + config.PROVINCE_LABELS + sorted(db.distinct_cities())))
         quick = st.radio("快速锁定城市（秋招用）", ["不限", "潍坊", "昆明", "大理"], horizontal=True)
-        f_city = st.selectbox("按地区筛选（支持省份，如“山东/云南”）", city_choices)
+        _yn_default = city_choices.index("云南") if "云南" in city_choices else 0
+        f_city = st.selectbox("按地区筛选（默认「云南」＝昆明/大理一带）", city_choices,
+                              index=_yn_default)
         if quick != "不限":
             f_city = quick
-        job_type = st.radio("岗位类型", ["全部", "实习", "秋招"], horizontal=True)
+        # 「岗位类型」不在这里 —— 它已上移为「🎯 岗位」页顶部的一级开关（默认秋招）
         f_keyword = st.text_input("关键词（岗位/公司/标签）", placeholder="例如：国企 / 电气 / 嵌入式 / 新媒体")
         c1, c2 = st.columns(2)
         active_only = c1.checkbox("仅看有效", value=True)
@@ -180,13 +183,34 @@ def main():
     if s["fake"]:
         st.warning(f"已标记 {s['fake']} 条疑似风险岗位，可在侧边栏勾选“只看风险标记”核对。")
 
-    (tab1, tab2, tab3, tab4, tab5, tab6,
-     tab7, tab8, tab9, tab10, tab11, tab12) = st.tabs(
-        ["岗位列表", "🏆 为你推荐", "🎯 投递工作台", "我的收藏", "👤 我的资料", "📮 网申跟踪",
-         "🛰 秋招渠道", "📚 备考方案", "📝 简历定制", "🌏 云南秋招", "🍃 烟草监控", "说明与合规"])
+    # 2026-09-16 收敛重构：12 个页签 → 4 个，主线「看岗位 → 官方投递 → 网申填表 → 定制简历 → 备考」。
+    # 注意：同一个 tabN 会在此文件里出现多次（把原多个页签合并进一个），Streamlit 会把内容
+    # 依次追加渲染到同一个页签 —— 所以下面 with tabN: 的编号必须与这里的 4 个页签一一对应。
+    (tab1, tab2, tab3, tab4) = st.tabs(
+        ["🎯 岗位", "📮 投递与网申", "📄 简历定制", "📚 备考方案"])
 
     # ============ 岗位列表 ============
     with tab1:
+        # ---- 顶部横幅：烟草监控的最新公告（监控不占页签，在后台自动化跑）----
+        try:
+            from ihub import tobacco as _tb
+            _seen = _tb.load_seen()
+            _latest = sorted(_seen.values(),
+                             key=lambda x: str(x.get("first_seen") or ""), reverse=True)[:3]
+            if _latest:
+                _titles = "　".join("· " + str(x.get("title") or "")[:32] for x in _latest)
+                st.info(f"🍃 **烟草最新公告**（已见 {len(_seen)} 条）：{_titles}\n\n"
+                        "→ 往下展开「🍃 烟草监控」看**报名窗口 / 剩余天数 / 是否限报 1 岗**")
+            else:
+                st.info("🍃 烟草监控还没扫描过 —— 往下展开「🍃 烟草监控」点一次「🔍 立即扫描一次」")
+        except Exception as _e:                                   # 监控坏了也不能拖垮岗位页
+            st.caption(f"烟草监控暂不可用：{_e}")
+
+        # ---- 一级开关：秋招 / 实习（默认秋招；实习数据保留，切过去就能看）----
+        job_type = st.radio("岗位类型（一级开关）", ["秋招", "实习", "全部"], horizontal=True,
+                            key="lvl_job_type",
+                            help="默认只看秋招。实习数据一条没删，切到「实习」就能看。")
+
         with st.expander("📥 导入我自己找的岗位表（飞书/Excel 复制粘贴就行，不需要导出权限）", expanded=False):
             st.caption("在飞书多维表格 / Excel / WPS 里 **框选表格区域 → Ctrl+C → 粘到下面**，点导入即可。"
                        "**只复制数据行、没有表头也能用** —— 会自动按内容猜列（网址→链接、城市名→城市、"
@@ -281,8 +305,8 @@ def main():
             ):
                 st.toast("已生成：投递入口清单（含官方网申入口）")
 
-    # ============ 🏆 为你推荐 ============
-    with tab2:
+    # ============ 🏆 为你推荐（并入 🎯 岗位）============
+    with tab1:
         st.markdown("#### 🏆 岗位推荐（钱多 / 轻松 / 专业契合 综合打分）")
         from ihub import prefs as prefs_mod, match
         p = prefs_mod.load()
@@ -333,7 +357,7 @@ def main():
                 width="stretch", height=620,
             )
 
-    # ============ 投递工作台 ============
+    # ============ 🎯 投递工作台（并入 📄 简历定制）============
     with tab3:
         st.warning(AUTOBOT_NOTE)
         scope = st.radio("查看", ["🎯 投递箱（待投）", "✅ 已投记录"], horizontal=True)
@@ -404,8 +428,8 @@ def main():
                             db.set_apply_state([(job["id"], 0)])
                             st.rerun()
 
-    # ============ 我的收藏 ============
-    with tab4:
+    # ============ 我的收藏（并入 🎯 岗位）============
+    with tab1:
         df_fav = load_df(None, None, active_only, False, True, unexpired, since_days)
         if df_fav.empty:
             st.info("还没有收藏。")
@@ -417,8 +441,8 @@ def main():
                                         "link": st.column_config.LinkColumn("投递链接（官方）")},
                          width="stretch")
 
-    # ============ 👤 我的资料 ============
-    with tab5:
+    # ============ 👤 我的资料（并入 📮 投递与网申）============
+    with tab2:
         st.markdown("#### 👤 我的资料（生成投递材料时使用）")
         st.caption("资料只保存在本机 `data/profile.json`，不上传任何服务器。任何人使用本工具时，在这里换成自己的简历即可。")
         from ihub import profile as prof_mod
@@ -519,8 +543,8 @@ def main():
             path = autofill.save_userscript(prof=prof_mod.load())
             st.success(f"已生成：{path}（资料更新后重新点一次即可）")
 
-    # ============ 📮 网申跟踪 ============
-    with tab6:
+    # ============ 📮 网申跟踪（并入 📮 投递与网申）============
+    with tab2:
         st.markdown("#### 📮 网申跟踪（我投了哪些、进行到哪一步）")
         st.caption("秋招/实习都能记：公司、岗位、城市、截止日期、进度、备注。进度变化会自动记录投递日期。")
         stt = db.app_stats()
@@ -609,8 +633,8 @@ def main():
                 db.app_delete(int(del_id))
                 st.rerun()
 
-    # ============ 🛰 秋招渠道 ============
-    with tab7:
+    # ============ 🛰 秋招渠道（并入 🎯 岗位）============
+    with tab1:
         st.markdown("#### 🛰 秋招渠道与岗位（找全 + 直达官方报名）")
         from ihub import campus_channels as cc
 
@@ -663,7 +687,7 @@ def main():
         st.caption("提示：BOSS/智联/牛客等需登录后查看；本页只提供官方入口与搜索直达，不代替登录抓取。")
 
     # ============ 📚 备考方案 ============
-    with tab8:
+    with tab4:
         # ---- 成品方案：云南烟草备考作战方案（完整版，可直接打印）----
         _plan_md = os.path.join(ROOT_APP, "备考冲刺资料", "云南烟草2027届备考作战方案.md")
         _plan_docx = os.path.join(ROOT_APP, "备考冲刺资料", "云南烟草2027届备考作战方案.docx")
@@ -768,8 +792,8 @@ def main():
                 else:
                     st.warning("没解析出数据行：确认第一行是表头（列名如 岗位/公司/城市/链接），后面每行一条。")
 
-    # ============ 简历定制（粘贴 JD → 定向简历 + 网申文案） ============
-    with tab9:
+    # ============ 📄 简历定制（粘贴 JD → 定向简历 + 网申文案）（并入 📄 简历定制）============
+    with tab3:
         from ihub import tailor as _tk
         st.markdown("#### 📝 简历定制与网申文案")
         st.caption("粘贴岗位 JD → 自动识别岗位方向 → 生成对应侧重的简历（docx / pdf）"
@@ -882,8 +906,8 @@ def main():
                                file_name=f"网申文案_{_tk.file_of(_key)}.txt", mime="text/plain",
                                key="tk_dl_all")
 
-    # ============ 🌏 云南秋招（昆明 / 大理 投递渠道地图） ============
-    with tab10:
+    # ============ 🌏 云南秋招（昆明 / 大理 渠道地图）（并入 🎯 岗位）============
+    with tab1:
         from ihub import yunnan as yn
         from ihub import platforms as P
 
@@ -1004,8 +1028,8 @@ def main():
         st.caption("⚠️ 烟草「同一批次只能报 1 个单位 1 个岗位，重复投递取消资格」——"
                    "投之前先在「📮 网申跟踪」记一笔，投完立刻改状态。")
 
-    # ============ 🍃 烟草监控（主力备考方向，单独一页） ============
-    with tab11:
+    # ============ 🍃 烟草监控（并入 🎯 岗位；公告另在岗位页顶部出横幅）============
+    with tab1:
         from ihub import tobacco as TB
 
         st.markdown("#### 🍃 烟草招聘监控 —— 只盯报名窗口，不让你错过任何一个批次")
@@ -1157,9 +1181,9 @@ def main():
                 "- 报名系统多为第三方平台（如 `qhtobacco.zhaopin.com`），点报名平台进官网后，"
                 "**右下角「📝 网申助手」照样能帮你填**。")
 
-    # ============ 说明 ============
+    # ============ 说明（不再占页签，收进侧边栏）============
 
-    with tab12:
+    with st.sidebar.expander("ℹ️ 使用说明与合规", expanded=False):
         st.markdown("#### 使用说明")
         st.markdown(
             "1. 抓取 → 筛选 → 勾选 🎯投递箱 → 保存；\n"
