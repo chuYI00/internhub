@@ -161,8 +161,17 @@ def main() -> int:
         check(f"含关键单位「{kw}」", kw in names)
     check("每条都有 对口岗位/节奏/提醒",
           all(u.get("fit") and u.get("rhythm") and u.get("tips") for u in units))
-    check("每条都至少有一个可用入口（官网或搜索直达）",
+    check("每条都至少有一个可用入口（官方直达或搜索兜底）",
           all(u.get("portal") or u.get("apply") or u.get("search") for u in units))
+    # 第 2 步重构：portal/apply 只允许企业自己的域名，搜索引擎链接一律清出去
+    from ihub import linkcheck as _lc
+    check("官方投递字段里没有伪直达（第 2 步硬标准）",
+          not any(_lc.is_any_search(u.get(k) or "")
+                  for u in units for k in ("portal", "apply")),
+          [(u["name"], u.get(k)) for u in units for k in ("portal", "apply")
+           if _lc.is_any_search(u.get(k) or "")])
+    check("拿不到官方直达的会明说（不拿假直达冒充）",
+          all(yn.has_official(u) or "搜索兜底" in u["apply_note"] for u in units))
     check("高契合单位 ≥10 家", len(yn.for_me()) >= 10, len(yn.for_me()))
     txt = yn.as_text()
     check("导出文本含烟草官网", "tobacco.gov.cn" in txt)
@@ -189,14 +198,23 @@ def main() -> int:
     check("每条都标注了 是否需登录 + 能否自动抓", all(
         isinstance(x["login"], bool) and x["crawl"] for x in plats))
     check("有可自动抓的平台", len(PL.auto_crawlable()) >= 6, len(PL.auto_crawlable()))
-    links = PL.search_links()
-    check("搜索直达 ≥20 条", len(links) >= 20, len(links))
-    check("搜索直达全部是 http(s)", all(u.startswith("http") for _, u, _ in links))
-    check("搜索直达是「站内搜」不是瞎编的深链",
-          all("%3A" in u or "site" in u or "weixin" in u for _, u, _ in links))
-    check("点开的搜索链接带云南关键词",
-          all(("昆明" in u) or ("%E6%98%86%E6%98%8E" in u) or ("云南" in u) or ("%E4%BA%91" in u)
-              for _, u, _ in links))
+    # 第 2 步重构：伪直达（百度 site: 站内搜）全部移除，改为「官方入口 + 该敲的词」
+    from ihub import linkcheck as _lc2
+    check("平台矩阵里再也没有百度/搜狗伪直达",
+          not any(_lc2.is_fake_direct(x["url"]) for x in plats),
+          [x["url"] for x in plats if _lc2.is_fake_direct(x["url"])])
+    check("entry_links 全部是官方入口（不是搜索引擎页）",
+          all(not _lc2.is_fake_direct(u) for _, u, _ in PL.entry_links()),
+          [u for _, u, _ in PL.entry_links() if _lc2.is_fake_direct(u)])
+    check("entry_links ≥20 条且都是 http(s)",
+          len(PL.entry_links()) >= 20 and all(u.startswith("http") for _, u, _ in PL.entry_links()),
+          len(PL.entry_links()))
+    check("只有真支持站内搜索的平台才给搜索链接（24365）",
+          sum(1 for x in plats if PL.in_site_search(x)) == 1,
+          [x["name"] for x in plats if PL.in_site_search(x)])
+    check("没有站内搜索的平台给了「该敲什么词」的说明",
+          all(("关键词" in d or "站内搜索框" in d) for _, u, d in PL.entry_links()
+              if "keyword=" not in u))
     check("今天该干什么 6 步", len(PL.today_plan()) == 6, len(PL.today_plan()))
     txt = PL.as_text()
     check("导出文本含 BOSS 与 应届生", "BOSS" in txt and "应届生" in txt)

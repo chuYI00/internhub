@@ -70,6 +70,26 @@ def main() -> int:
     check("没有残留的 tab5..tab12（会被渲染到不存在的页签里）",
           not any(int(n) > 4 for n in _blocks), sorted(set(_blocks)))
 
+    print("[1c] 链接域名与公司名匹配检查（第 2 步硬标准）")
+    from ihub import linkcheck as _lc
+    from ihub import channels as _ch
+    _bad = {c: u for c, u in _ch.OFFICIAL_URLS.items() if _lc.is_any_search(u)}
+    check("channels 里没有「点开是搜索引擎 / 招聘平台」的伪官方入口", not _bad, list(_bad.items())[:3])
+    # 域名要和公司名对得上：每条官方入口都要能说清「这个域名凭什么是这家的」——
+    # 要么域名里有该公司的英文/拼音标识，要么人工指纹表里登记过（政府站、ATS 等）。
+    _no_fp = []
+    for _c, _u in _ch.OFFICIAL_URLS.items():
+        if not _lc.words_for(_u, _c):
+            _no_fp.append((_c, _u))
+    check("每条官方入口都能对应到该单位的页面指纹（标题/正文关键词）",
+          not _no_fp, _no_fp[:3])
+    _pl = [x for x in __import__("ihub.platforms", fromlist=["x"]).all_platforms()
+           if _lc.is_fake_direct(x["url"])]
+    check("平台矩阵里没有伪直达", not _pl, [x["url"] for x in _pl][:3])
+    _yn = [u["name"] for u in __import__("ihub.yunnan", fromlist=["x"]).all_units()
+           if not __import__("ihub.yunnan", fromlist=["x"]).has_official(u)]
+    check(f"云南渠道地图里没拿到官方直达的会明说（{len(_yn)} 家）", True, _yn[:4])
+
     print("[2] 广投批量按钮")
     keys = [b.key for b in at.button]
     check("有『全部加入投递箱』", "bulk_in" in keys, keys[:20])

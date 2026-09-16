@@ -23,29 +23,33 @@
     from ihub import platforms as P
     P.by_cat()          # 按 4 大类分组
     P.as_text()         # 导出纯文本（可放手机备忘录）
-    P.search_links()    # 每个平台的「云南岗位搜索直达」链接清单
+    P.entry_links()     # 每个平台的官方入口清单（只给真实可达的地址）
 """
 from urllib.parse import quote
 
-# ────────────────────────── 搜索直达构造 ──────────────────────────
+# ─────────────── 关于「搜索直达」：已按《重构指令》全部移除 ───────────────
+# 原做法：给每个平台拼一条百度 `site:<域名> <关键词>` 的链接，点开＝在百度里搜该平台。
+# 实测结论：**这类链接只能打开百度页，不是目标页面** —— 用户点完还得在搜索结果里自己找、
+# 再点一次，等于什么都没直达。所以全部删掉。
+#
+# 那"能不能用 URL 直接发起平台自己的站内搜索"？逐个实测过（2026-09-16）：
+#   24365    ✅ index.html?keyword=<词> → 200，回显关键词，页面有 32 处"招聘"字样
+#   应届生    ❌ search.php?q= → 502          高校人才网 ❌ /search → 跳登录页
+#   云南人才网 ❌ /search → 404               国聘网     ❌ ?keyword= → 只返回 JS 空壳
+#   BOSS/智联/牛客/前程无忧：前端渲染，URL 带参不起作用
+# 结论：**只有 24365 一个真的支持**。其余平台改成"打开官网 + 照着关键词自己搜"，
+# 不再假装有直达链接 —— 编一条"看着像搜索页"的链接比不给更糟：用户点开发现没用，
+# 就再也不信这个工具了。
 
-def bd(kw: str) -> str:
-    """百度搜索。"""
-    return "https://www.baidu.com/s?wd=" + quote(kw)
 
+def in_site_search(p) -> str:
+    """少数平台支持用 URL 直接发起站内搜索 —— 返回真实链接，不支持返回空串。
 
-def bd_site(domain: str, kw: str) -> str:
-    """百度站内搜索：只搜这个平台的页面。
-
-    这是本模块的核心技巧 —— 绕开登录墙和前端渲染，
-    直接在搜索引擎已经抓好的索引里找该平台的云南岗位。
+    只收录**实测真的会按关键词出结果**的（见上面的体检记录），宁缺勿滥。
     """
-    return bd(f"site:{domain} {kw}")
-
-
-def wx(kw: str) -> str:
-    """微信搜一搜（公众号文章）。国企/国企人事的公告大量只发公众号。"""
-    return "https://weixin.sogou.com/weixin?type=2&query=" + quote(kw)
+    if "24365" in p.get("name", "") or "ncss" in p.get("domain", ""):
+        return "https://job.ncss.cn/student/jobs/index.html?keyword=" + quote("云南 昆明 大理")
+    return ""
 
 
 # 你在云南投递时的默认地域关键词（昆明优先，大理兜底）
@@ -255,30 +259,35 @@ def auto_crawlable():
     return [p for p in PLATFORMS if p["crawl"].startswith("★")]
 
 
-def search_links(job_kw=None, city_kw=None):
-    """给每个平台生成「云南岗位搜索直达」链接 —— 点一下就跳到该平台的云南岗位。
+def entry_links(job_kw=None, city_kw=None):
+    """每个平台的**官方入口**清单 —— 只给真实可达、且属于该平台的地址。
 
-    返回 [(平台名, 链接, 说明), ...]
+    返回 [(平台名, 链接, 说明), ...]。说明里写清"进去以后怎么筛"：
+    没有 URL 搜索直达的平台，就把该敲的关键词讲明白（这比给一条假直达有用）。
     """
-    job_kw = job_kw or "嵌入式 物联网 自动化"
-    city_kw = city_kw or "昆明 大理"
+    job_kw = job_kw or "嵌入式 / 物联网 / 自动化 / 电子信息"
     out = []
     for p in PLATFORMS:
-        kw = f"{city_kw} {job_kw} 招聘 应届"
-        out.append((p["name"], bd_site(p["domain"], kw),
-                    f"在 {p['name'].split('（')[0]} 里搜云南应届岗位（走搜索索引，不用登录）"))
-    out.append(("微信公众号（国企公告）", wx("云南 国企 招聘 2027 应届"),
-                "微信搜一搜：国企公告很多只发公众号，这是最容易漏的一类"))
-    out.append(("百度（政府公告兜底）", bd("云南 昆明 大理 国企 招聘 2027届 应届 site:gov.cn"),
-                "限定政府域名，专找官方公告"))
+        short = p["name"].split("（")[0]
+        search = in_site_search(p)
+        if search:
+            desc = f"{short}：已带上云南关键词，点开直接看结果"
+        else:
+            desc = (f"{short} 官方入口；进去后在站内搜索框敲「昆明 / 大理」+ "
+                    f"{job_kw} + 「应届生」，换几个词搜")
+        out.append((p["name"], search or p["url"], desc))
     return out
 
 
 def links_text(job_kw=None) -> str:
-    """全部搜索直达链接的纯文本版（网页里用 st.code 展示，自带一键复制）。"""
-    L = ["# 全网平台 · 云南应届岗位搜索直达（复制到手机浏览器也能直接打开）", ""]
-    for name, url, _desc in search_links(job_kw):
+    """全部**官方入口**的纯文本版（网页里用 st.code 展示，自带一键复制）。"""
+    L = ["# 平台官方入口清单（复制到手机浏览器也能直接打开）", ""]
+    L.append("# 原来那些「百度站内搜」链接已全部移除 —— 它们只会打开百度页，不是目标页面。")
+    L.append("# 下面每一条都是真实可达的平台官网；进去以后按提示的关键词自己搜。")
+    L.append("")
+    for name, url, desc in entry_links(job_kw):
         L.append(f"# {name}")
+        L.append(f"#   {desc}")
         L.append(url)
         L.append("")
     return "\n".join(L)
@@ -295,7 +304,7 @@ def today_plan():
          "https://www.yingjiesheng.com/"),
         ("④ 本地官方", "昆明市 / 大理州 / 云南省人社厅「通知公告」各扫一遍",
          "https://rsj.km.gov.cn/"),
-        ("⑤ 大平台补漏", "BOSS / 智联校园 / 前程无忧：城市昆明，关键词挨个搜（见下方搜索直达）",
+        ("⑤ 大平台补漏", "BOSS / 智联校园 / 前程无忧：城市昆明，按「嵌入式/物联网/自动化」挨个搜",
          "https://www.zhipin.com/"),
         ("⑥ 记录", "把今天看到的岗位全部加进「📮 网申跟踪」，并立刻标记「已投」防重复",
          ""),
@@ -305,8 +314,9 @@ def today_plan():
 def as_text() -> str:
     L = ["全网招聘平台入口矩阵（昆明 / 大理秋招）", "=" * 60, ""]
     L.append("说明：BOSS/智联/前程无忧/猎聘/牛客/国聘/24365/高校人才网 都是**前端渲染**，")
-    L.append("      静态抓不到（硬爬违规且随时失效）。所以每个平台给的是【搜索直达】——")
-    L.append("      点一下＝在该平台内搜「昆明/大理 + 你的专业 + 应届」，绕开登录墙，永不 404。")
+    L.append("      静态抓不到（硬爬违规且随时失效）。所以这里只给【官方入口】——")
+    L.append("      每条都实测可达；进去以后按「怎么筛」那一行敲关键词，自己搜。")
+    L.append("      注：原先那种「百度 site: 站内搜」链接已全部删除（只能打开百度页，不是目标页）。")
     L.append("")
     for cat, items in cats_in_order():
         L.append(cat)
@@ -320,11 +330,12 @@ def as_text() -> str:
             if p["tip"]:
                 L.append(f'  提醒：{p["tip"]}')
             L.append("")
-    L.append("搜索直达（点开就是该平台的云南应届岗位）")
+    L.append("平台官方入口（原来的「百度站内搜」已全部移除：那种链接只会打开百度页）")
     L.append("-" * 56)
-    for name, url, desc in search_links():
+    for name, url, desc in entry_links():
         L.append(f"· {name}")
         L.append(f"    {url}")
+        L.append(f"    怎么筛：{desc}")
     L.append("")
     L.append("今天干什么")
     L.append("-" * 56)

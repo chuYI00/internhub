@@ -52,6 +52,8 @@ def main() -> int:
         [PY, "tests/test_weblist.py"], "采集：官方投递入口/公司名/数据源")
     results["🍃 烟草监控（报名窗口 / 新增比对 / 排序）"] = run(
         [PY, "tests/test_tobacco.py"], "烟草监控：只报增量 + 报名窗口倒计时")
+    results["🔍 链接体检（伪直达识别 / 分级 / 官方字段无污染）"] = run(
+        [PY, "tests/test_linkcheck.py"], "链接体检：A/P/B/C/D 分级 + 砍伪直达")
     results["CSV 导入链路"] = run(
         [PY, "tests/test_import_csv.py"], "CSV 导入 → 入库")
     results["网页端冒烟（4 个页签 + 页签对齐 + 广投按钮）"] = run(

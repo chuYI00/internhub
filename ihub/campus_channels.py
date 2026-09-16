@@ -1,20 +1,33 @@
 # -*- coding: utf-8 -*-
-"""秋招信息渠道全集（按用户提供的七大板块整理）+ 搜索直达链接生成。
+"""秋招信息渠道全集（按七大板块整理）—— 只给官方入口，不给伪直达。
 
-原则：
-- 只放**官方/公开入口**；公众号类给出微信搜索直达；地方小程序类给出搜索直达；
-- 需登录的平台仅做入口与搜索直达，不代替登录抓取。
+第 2 步重构（《重构指令》）动了什么
+----------------------------------
+原来这里有两样「看着很贴心、其实没用」的东西：
+
+  1. `wx(...)` —— 搜狗微信搜索链接。点开是**搜狗的结果页**，不是公众号本身。
+  2. `bd(...)` / `SEARCH_SITES` —— 一堆 `site:xxx.com 昆明 秋招` 的百度链接。
+     点开是**百度的结果页**，不是岗位页；用户还得在结果里再点一次。
+
+两类都是「伪直达」：用户点完发现没用，就再也不信这个工具了 —— 所以全部删掉。
+换成的做法是：**给真入口 + 写清楚进去以后敲什么词**。
+「搜索」这件事本身没错，错的是把它包装成直达。
+
+对外接口：
+    official_entries()     所有官方/公开入口（真能点开的）
+    manual_search_notes()  站内搜索说明（不给链接，只给关键词与位置）
+    CHANNEL_GROUPS         渠道分组（url 为空串的是纯说明条目）
 """
 from urllib.parse import quote
 
 
 def wx(kw: str) -> str:
-    """微信公众号文章搜索直达（搜狗微信）。"""
+    """【已废弃】搜狗微信搜索链接 —— 点开是搜索引擎页，不是公众号。仅保留供兼容。"""
     return "https://weixin.sogou.com/weixin?type=2&query=" + quote(kw)
 
 
 def bd(kw: str) -> str:
-    """通用网页搜索直达。"""
+    """【已废弃】百度搜索链接 —— 伪直达。新代码不要再用它当「直达」。"""
     return "https://www.baidu.com/s?wd=" + quote(kw)
 
 
@@ -125,29 +138,91 @@ CHANNEL_GROUPS = [
     ]),
 ]
 
-# 便于"搜索直达"的平台（百度站内搜索方式，无需登录也能看到公告）
-SEARCH_SITES = [
-    ("国聘（iguopin）", "site:iguopin.com"),
-    ("24365 国家大学生就业服务平台", "site:ncss.cn"),
-    ("中国公共招聘网", "site:job.mohrss.gov.cn"),
-    ("实习僧", "site:shixiseng.com"),
-    ("智联招聘", "site:zhaopin.com"),
-    ("前程无忧", "site:51job.com"),
-    ("BOSS直聘", "site:zhipin.com"),
-    ("牛客网", "site:nowcoder.com"),
-    ("应届生求职网", "site:yingjiesheng.com"),
-    ("高校就业信息网（.edu.cn）", "site:edu.cn"),
-    ("政府/人社公告（.gov.cn）", "site:gov.cn"),
+# 需要「自己站内搜」的平台 —— 这里只列**关键词与去哪搜**，不给假链接。
+# 原 SEARCH_SITES（site:xxx.com 的百度链接）已按第 2 步重构全部删除。
+MANUAL_SEARCH = [
+    ("国聘网", "iguopin.com", "校园招聘 → 城市「昆明/大理」→ 单位性质「国有企业」"),
+    ("24365", "job.ncss.cn", "找工作 → 地点云南 → 单位性质「国有企业/事业单位」"),
+    ("中国公共招聘网", "job.mohrss.gov.cn", "招聘信息 → 地区选云南"),
+    ("BOSS直聘", "zhipin.com", "城市切昆明/大理 → 筛「应届生」"),
+    ("智联招聘·校园", "xiaoyuan.zhaopin.com", "选云南 → 按「国企/上市公司」筛"),
+    ("前程无忧", "51job.com", "校园招聘频道 → 城市昆明"),
+    ("实习僧", "shixiseng.com", "城市昆明/大理 → 类型「校招」"),
+    ("牛客网", "nowcoder.com", "「校招日程」看时间轴；搜「云南」看本地岗位"),
+    ("应届生求职网", "yingjiesheng.com", "首页公告列表从上往下刷"),
+    ("高校就业信息网", "各校域名", "按校名找就业网 → 「招聘信息」栏"),
+    ("政府/人社公告", "*.gov.cn", "人社厅/人社局 → 「通知公告」栏，搜「招聘」"),
 ]
 
 
-def search_links(city: str = "", keyword: str = "", year: str = "2027届") -> list:
-    """生成"城市+关键词+秋招"在各平台的搜索直达链接（供网页展示）。"""
-    parts = [p for p in [year, "秋招", "校园招聘", city, keyword] if p]
-    q = " ".join(parts)
-    out = [("百度（全网）", f"https://www.baidu.com/s?wd={quote(q)}")]
-    for name, site in SEARCH_SITES:
-        out.append((f"{name} 搜索", f"https://www.baidu.com/s?wd={quote(site + ' ' + q)}"))
-    out.append(("微信公众号（国资小新/央企校招）", wx(q)))
-    out.append(("B站（备考/经验）", f"https://search.bilibili.com/all?keyword={quote(q + ' 笔试 面试')}"))
+def _clean_groups() -> None:
+    """清掉 CHANNEL_GROUPS 里的伪直达：把搜索引擎链接换成一句「该去搜什么」。
+
+    注意只清**伪直达**（点开是搜索引擎）—— 像 BOSS、智联这种平台入口是真链接，
+    要留着（它们本身就是「平台」，不是被冒充成「企业官方页」）。
+    """
+    from . import linkcheck
+    for i, (title, items) in enumerate(CHANNEL_GROUPS):
+        new = []
+        for name, url in items:
+            if url and linkcheck.is_fake_direct(url):
+                kw = ""
+                if "query=" in url:
+                    from urllib.parse import unquote
+                    kw = unquote(url.split("query=")[-1])
+                elif "wd=" in url:
+                    from urllib.parse import unquote
+                    kw = unquote(url.split("wd=")[-1]).replace("site:", "")
+                tip = f"（不给假链接：自己在站内搜「{kw}」）" if kw else "（不给假链接：自己在站内搜）"
+                new.append((name.replace("（搜索）", "").replace("（微信搜索）", "") + tip, ""))
+            else:
+                new.append((name, url))
+        CHANNEL_GROUPS[i] = (title, new)
+
+
+_clean_groups()
+
+
+def manual_search_notes(city: str = "", keyword: str = "", year: str = "2027届") -> list:
+    """站内搜索说明：[("平台", "去哪搜", "该敲的词")] —— **故意不给链接**。
+
+    没有站内搜索直达的平台，与其编一条「看着像搜索页」的链接，不如把
+    「去哪个栏目、敲什么词」讲明白 —— 这比假直达有用。
+    """
+    kw = " / ".join([k for k in [keyword, city, "应届生"] if k]) or "你的专业词 + 昆明 / 大理"
+    out = []
+    for name, site, where in MANUAL_SEARCH:
+        out.append((name, site, f"{where}；关键词敲「{kw}」，换几个词多搜几次"))
     return out
+
+
+def official_entries() -> list:
+    """所有**真能点开**的入口（官方站 + 平台站）：[(名称, 链接, 板块)]。"""
+    from . import linkcheck
+    out = []
+    for title, items in CHANNEL_GROUPS:
+        for name, url in items:
+            if url and not linkcheck.is_fake_direct(url):
+                out.append((name, url, title))
+    return out
+
+
+def fake_direct_left() -> list:
+    """自检用：还有没有残留的伪直达（应该恒为空列表）。"""
+    from . import linkcheck
+    bad = []
+    for title, items in CHANNEL_GROUPS:
+        for name, url in items:
+            if url and linkcheck.is_fake_direct(url):
+                bad.append((name, url))
+    return bad
+
+
+def search_links(city: str = "", keyword: str = "", year: str = "2027届") -> list:
+    """【已按第 2 步重构移除】原来生成的是一堆百度 `site:` 伪直达。
+
+    现在只返回**官方入口**（点开真的是官方网站），搜索动作交给
+    `manual_search_notes()` 用文字说清楚。保留函数名是为了让老代码不至于直接崩，
+    但返回里不会再有搜索引擎链接。
+    """
+    return [(name, url) for name, url, _ in official_entries()]

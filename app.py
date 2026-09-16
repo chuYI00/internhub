@@ -118,6 +118,8 @@ def main():
     st.title("🎯 InternHub · 秋招工作台")
     st.caption("**主线：看岗位 → 官方投递 → 网申填表 → 定制简历 → 备考目标单位**　|　"
                "默认视图：**秋招 × 云南（昆明 / 大理）**　|　本地运行，资料不上传")
+    st.caption("链接口径：**只有企业/单位自己的域名才叫「官方直达」**；"
+               "招聘平台的页一律标「来源页/平台入口」；点开是搜索引擎的假直达已全部移除。")
 
     db.init_db()
     db.backfill_official_urls()
@@ -438,7 +440,10 @@ def main():
                          hide_index=True,
                          column_config={"title": "岗位", "company": "公司", "city": "城市",
                                         "salary": "薪资", "截止时间": "截止时间", "source": "来源",
-                                        "link": st.column_config.LinkColumn("投递链接（官方）")},
+                                        "link": st.column_config.LinkColumn(
+                                            "投递（原平台）",
+                                            help="来源平台的原始页面 —— 不等于官方投递页，"
+                                                 "官方入口看「🎯 岗位」页的渠道地图")},
                          width="stretch")
 
     # ============ 👤 我的资料（并入 📮 投递与网申）============
@@ -633,6 +638,55 @@ def main():
                 db.app_delete(int(del_id))
                 st.rerun()
 
+    # ============ 🔍 链接体检（并入 📮 投递与网申）============
+    with tab2:
+        from ihub import linkcheck as LC
+
+        st.markdown("#### 🔍 链接体检（每条渠道链接到底能不能点）")
+        st.caption("标准来自《重构指令》：**真实可达（HTTP 200）+ 页面确实属于该单位 + 是投递入口本身**"
+                   "（不是搜索页、不是平台转发页）。只有 **A 级**能当「官方投递直达」主按钮。")
+
+        _res = LC.load_saved()
+        if not _res:
+            st.info("还没有体检数据。在本机跑一次即可生成：`venv\\Scripts\\python.exe run_linkcheck.py`")
+        else:
+            _s = LC.summary(_res)
+            _m = st.columns(5)
+            _m[0].metric("受检链接", _s["total"])
+            _m[1].metric("A 官方直达", _s["A"], help="可以直接当投递主按钮")
+            _m[2].metric("P 平台入口", _s["P"], help="招聘平台自己的页，不是企业官方页")
+            _m[3].metric("C 淘汰", _s["C"], help="伪直达 / 死链 —— 已全部从按钮里移除")
+            _m[4].metric("D 待复查", _s["D"], help="沙箱网络不通或撞反爬，本机浏览器点一次即可")
+            st.caption(f"体检时间：{LC.saved_at() or '（未知）'}")
+
+            _fake = [r for r in _res if r["grade"] == "C"]
+            if _fake:
+                with st.expander(f"❌ C 级：{len(_fake)} 条已淘汰（这些**不会再出现在任何按钮里**）",
+                                 expanded=False):
+                    st.caption("它们点开只是搜索引擎结果页（百度 / 搜狗微信）或已经打不开 —— "
+                               "留着只会让人以为工具坏了，所以全删了，换成「去哪个栏目敲什么词」的文字说明。")
+                    for _r in _fake[:40]:
+                        st.markdown(f"- <small>{_r['label']}　`{_r['url'][:70]}`</small>",
+                                    unsafe_allow_html=True)
+
+            _d = [r for r in _res if r["grade"] == "D"]
+            if _d:
+                with st.expander(f"🔎 D 级：{len(_d)} 条待你在本机点一次确认", expanded=False):
+                    st.caption("沙箱里被 TLS 拦截 / 连接重置 / 撞上反爬（403·412·418）—— "
+                               "**这不代表链接坏**，只是这一侧测不了。你浏览器打开正常就是好的。")
+                    for _r in _d:
+                        st.markdown(f"- <small>{_r['label']}　`{_r['url'][:70]}`　—　{_r['reason']}</small>",
+                                    unsafe_allow_html=True)
+
+            _a = [r for r in _res if r["grade"] == "A"]
+            with st.expander(f"✅ A 级：{len(_a)} 条官方直达（本机验证通过）", expanded=False):
+                for _r in _a:
+                    st.markdown(f"- <small>{_r['label']}　`{_r['url'][:70]}`</small>",
+                                unsafe_allow_html=True)
+
+        st.caption("在本机重跑体检：`venv\\Scripts\\python.exe run_linkcheck.py`　"
+                   "（结果写入 data/link_health.json，网页读它；人工版在 `链接体检报告.md`）")
+
     # ============ 🛰 秋招渠道（并入 🎯 岗位）============
     with tab1:
         st.markdown("#### 🛰 秋招渠道与岗位（找全 + 直达官方报名）")
@@ -649,42 +703,68 @@ def main():
             st.info("秋招岗位库暂无数据：可在「📚 备考方案」上方用“导入秋招 CSV”或用下面渠道自己找（找到后可按模板导入）。")
         else:
             import pandas as _pd
+            from ihub import linkcheck as _LC
+
             qdf = _pd.DataFrame(q_rows)
-            qdf["报名入口"] = qdf["official_url"].fillna("").where(qdf["official_url"].fillna("") != "", qdf["link"])
+            # 第 2 步硬标准：**只有企业自己的域名才能叫「官方报名」**。
+            # 来源平台的链接（实习僧详情页、高校就业网）单独一列，标清平台名，
+            # 不让它冒充官方入口 —— 之前用户就是被这种「看着像官方」的链接骗过。
+            qdf["官方报名"] = qdf["official_url"].fillna("").map(
+                lambda u: u if (u and not _LC.is_any_search(u)) else "")
+            qdf["来源页"] = qdf["link"].fillna("")
             qdf["截止"] = qdf["deadline"].fillna("")
             st.dataframe(
-                qdf[["company", "title", "city", "batch", "degree", "截止", "报名入口", "source"]],
+                qdf[["company", "title", "city", "batch", "degree", "截止",
+                     "官方报名", "来源页", "source"]],
                 hide_index=True,
                 column_config={
                     "company": "单位", "title": "岗位", "city": "城市", "batch": "届别",
                     "degree": "学历", "截止": "截止日期",
-                    "报名入口": st.column_config.LinkColumn("官方报名/公告"),
+                    "官方报名": st.column_config.LinkColumn(
+                        "✅ 官方报名（企业域名）",
+                        help="只有企业/单位自己的域名才显示在这里；为空＝该来源没有官方入口"),
+                    "来源页": st.column_config.LinkColumn(
+                        "来源页（非官方）", help="采集到这条岗位的原始平台页面，进去后仍可用网申助手填表"),
                     "source": "来源",
                 },
                 width="stretch", height=320,
             )
+            _no_off = int((qdf["官方报名"] == "").sum())
+            if _no_off:
+                st.caption(f"其中 {_no_off} 条没有官方入口（来源平台只给了自己的详情页）—— "
+                           f"按「公司」去「🌏 云南秋招渠道地图」或「全网平台入口」找官方报名页，找到后可在"
+                           f" `data/official_urls.json` 里补一条，下次自动匹配。")
             if st.button("⬇️ 把上面这些秋招岗位加入「📮 网申跟踪」"):
                 n = db.app_add_from_job_ids([r["id"] for r in q_rows])
                 st.success(f"已加入 {n} 条（重复自动跳过），去「📮 网申跟踪」维护进度")
 
         st.divider()
-        st.markdown("**② 一键搜索直达**（把城市/关键词组合，直接跳到各平台的秋招结果页）")
+        st.markdown("**② 各平台怎么搜**（⚠️ 原来的「一键搜索直达」已按重构指令删除）")
+        st.caption("删掉的原因：那些链接拼的是「百度里搜某平台」，**点开只是百度结果页**，"
+                   "不是岗位页 —— 你还得在结果里自己翻，等于没直达，反而让人以为工具坏了。"
+                   "现在改成：告诉你**去哪个栏目、敲什么词**，比一条假链接有用。")
         s1, s2 = st.columns([1, 2])
-        scity = s1.selectbox("搜索城市", ["潍坊", "昆明", "大理", "全国", "山东", "云南"], key="srch_city")
-        skw = s2.text_input("搜索关键词（专业方向/岗位，如 物联网、电气、信息科技）", value="物联网", key="srch_kw")
-        links = cc.search_links(city="" if scity == "全国" else scity, keyword=skw)
-        cols = st.columns(3)
-        for i, (name, url) in enumerate(links):
-            cols[i % 3].markdown(f"- [{name}]({url})")
+        scity = s1.selectbox("搜索城市", ["昆明", "大理", "云南", "全国"], key="srch_city")
+        skw = s2.text_input("搜索关键词（专业方向/岗位，如 物联网、电气、信息科技）",
+                            value="物联网", key="srch_kw")
+        _notes = cc.manual_search_notes(city="" if scity == "全国" else scity, keyword=skw)
+        with st.expander(f"📋 去这 {len(_notes)} 个平台搜，每个平台的筛法（点开看）", expanded=True):
+            for _name, _site, _how in _notes:
+                st.markdown(f"- **{_name}**（`{_site}`）：{_how}")
 
         st.divider()
-        st.markdown("**③ 七大渠道官方入口**（点开即到官方/公开页面）")
+        st.markdown("**③ 七大板块官方入口**（点开即到官方/公开页面）")
         for title, items in cc.CHANNEL_GROUPS:
             with st.expander(title, expanded=False):
                 c = st.columns(2)
                 for i, (name, url) in enumerate(items):
-                    c[i % 2].markdown(f"- [{name}]({url})")
-        st.caption("提示：BOSS/智联/牛客等需登录后查看；本页只提供官方入口与搜索直达，不代替登录抓取。")
+                    if url:
+                        c[i % 2].markdown(f"- [{name}]({url})")
+                    else:
+                        # 原先是百度/搜狗搜索链接 —— 伪直达，已换成一句说明
+                        c[i % 2].markdown(f"- <small>{name}</small>", unsafe_allow_html=True)
+        st.caption("提示：BOSS/智联/牛客等需登录后查看；本页只提供官方入口，**不再有任何"
+                   "「点开只是搜索引擎」的伪直达**。")
 
     # ============ 📚 备考方案 ============
     with tab4:
@@ -913,16 +993,17 @@ def main():
 
         st.markdown("#### 🌏 云南秋招投递渠道地图（昆明 / 大理）")
         st.caption("通用平台抓不到的（要登录、动态渲染、只走公众号）这里用「渠道地图」兜住："
-                   "每个单位一条，给官方公告页 / 网申入口 / 搜索直达。链接会变，但「去哪找」不会变。")
+                   "每个单位一条。**✅ 官方直达**＝该单位自己的域名，可直接当投递入口；"
+                   "**🔎 搜索兜底**＝点开是搜索引擎结果页，只用来找当期公告，不是投递入口。")
         st.info("**你的定位**：2027 届 · 昆明 + 大理 · 央国企为主 · 不限企业类型 · 重点备考烟草。"
                 "下面按「与你专业的契合度」排了序，★★★★ 以上的就是最该投的。")
 
         # ────────────── 全网平台入口（BOSS / 智联 / 牛客 / 国聘 / 24365 …）──────────────
-        st.markdown("##### 🌐 全网平台入口（点一下就直接跳到该平台去搜）")
+        st.markdown("##### 🌐 全网平台入口（点一下就到该平台官网，再按下面教的词去搜）")
         st.caption("实测结论：BOSS直聘、智联、前程无忧、猎聘、牛客、国聘网、24365、高校人才网 "
                    "**全是前端渲染**，静态爬虫拿不到岗位（硬爬违反 robots、随时失效）。"
-                   "所以这里给的是【搜索直达】：点开＝在该平台内搜「昆明/大理 + 你的专业 + 应届」，"
-                   "绕开登录墙，永远不会 404。")
+                   "测过之后只有 24365 一个**支持用链接直接发起站内搜索**，其余平台都改成"
+                   "「打开官网 + 把该敲的关键词写清楚」—— **不再编一条点开是搜索页的假直达**。")
 
         with st.expander("🗓 今天该干什么（6 步，照做就不漏公告）", expanded=True):
             for _i, (_step, _task, _url) in enumerate(P.today_plan(), 1):
@@ -948,16 +1029,25 @@ def main():
                     st.caption("怎么筛：" + _p["how"])
                     if _p["tip"]:
                         st.caption("提醒：" + _p["tip"])
-                    _b = st.columns([1, 1, 1])
-                    _b[0].link_button("🔗 打开官网", _p["url"], key=f"pl_u_{_cat[:2]}_{_j}")
-                    _b[1].link_button("🔍 搜云南应届岗",
-                                      P.bd_site(_p["domain"], "昆明 大理 招聘 应届"),
-                                      key=f"pl_s_{_cat[:2]}_{_j}")
-                    _b[2].link_button("💬 微信搜公告", P.wx("云南 国企 招聘 2027 应届"),
-                                      key=f"pl_w_{_cat[:2]}_{_j}")
+                    # 只有真能"用链接发起站内搜索"的平台才给第二个按钮（实测只有 24365）；
+                    # 其余平台不编假直达，改成把该敲的关键词写在下面。
+                    _search = P.in_site_search(_p)
+                    if _search:
+                        _b = st.columns([1, 1])
+                        _b[0].link_button("🔗 打开官网", _p["url"], key=f"pl_u_{_cat[:2]}_{_j}")
+                        _b[1].link_button("🔍 看云南岗位（已带关键词）", _search,
+                                          key=f"pl_s_{_cat[:2]}_{_j}")
+                    else:
+                        st.link_button("🔗 打开官网", _p["url"], key=f"pl_u_{_cat[:2]}_{_j}")
+                        st.caption("这个平台不支持用链接直接搜 —— 进站后在搜索框敲："
+                                   "`昆明` / `大理` ＋ 专业词（嵌入式 · 物联网 · 自动化 · 电子信息）"
+                                   "＋ `应届生`。**换几个词搜**，只搜一个词会漏掉一半岗位。")
                     st.markdown("")
 
-        with st.expander("🔗 全部搜索直达链接（一键复制，也能存到手机）", expanded=False):
+        with st.expander("🔗 全部平台官方入口（一键复制，也能存到手机）", expanded=False):
+            st.caption("⚠️ 这里**不再有「百度站内搜」那种链接**了 —— 实测它们只会打开百度页，"
+                       "不是目标页面，等于没直达（已按重构指令全部移除）。"
+                       "下面每条都是真实可达的官方入口。")
             st.code(P.links_text(), language=None)
 
         _pd1, _pd2 = st.columns([1, 3])
@@ -977,7 +1067,8 @@ def main():
             if st.button("📋 复制全部到剪贴板提示", key="yn_copy"):
                 st.success("已生成，点上面的 txt 下载即可（手机备忘录也能看）")
         with y3:
-            st.caption("标「官方直达」的是核对过的；其余给搜索直达 —— 永远不会 404。")
+            st.caption("标 **✅ 官方直达** 的是该单位自己的域名（体检过）；"
+                       "拿不到官方入口的会明写「搜索兜底」，**不拿假直达冒充**。")
 
         st.divider()
         st.markdown("##### 🎯 先看这些（★★★☆ 以上，按契合度排序）")
@@ -985,13 +1076,13 @@ def main():
             with st.expander(f'{u["heat"]}　{u["name"]}　—　{u["fit"][:34]}…'):
                 cols = st.columns([3, 1])
                 with cols[0]:
-                    if u.get("portal"):
-                        st.markdown(f'**官方公告**：{u["portal"]}')
-                    if u.get("apply"):
-                        st.markdown(f'**网申入口**：{u["apply"]}')
+                    for _what, _link in yn.official_links(u):
+                        st.markdown(f'**✅ {_what}（官方直达）**：{_link}')
+                    if not yn.has_official(u):
+                        st.markdown("**✅ 官方直达**：—（该单位没有独立网申页，走上级集团/公众号统一发布）")
                     if u.get("apply_note"):
                         st.caption("说明：" + u["apply_note"])
-                    st.markdown(f'**搜索直达**：{u["search"]}')
+                    st.caption(f'🔎 搜索兜底（点开是搜索引擎，只用来找公告）：{u["search"]}')
                     st.markdown(f'**对口岗位**：{u["fit"]}')
                     st.markdown(f'**招聘节奏**：{u["rhythm"]}')
                     st.warning(u["tips"])
@@ -1009,12 +1100,10 @@ def main():
             with st.expander(f"{cat}（{len(items)} 家）", expanded=False):
                 for u in items:
                     st.markdown(f'**{u["heat"]}　{u["name"]}**')
-                    bits = []
-                    if u.get("portal"):
-                        bits.append(f'[官方公告]({u["portal"]})')
-                    if u.get("apply"):
-                        bits.append(f'[网申入口]({u["apply"]})')
-                    bits.append(f'[搜索直达]({u["search"]})')
+                    bits = [f'✅ [{_what}（官方直达）]({_link})' for _what, _link in yn.official_links(u)]
+                    if not bits:
+                        bits.append("✅ 官方直达：—（走上级集团/公众号统一发布）")
+                    bits.append(f'🔎 [搜索兜底]({u["search"]})')
                     st.markdown("　|　".join(bits))
                     st.caption(f'对口：{u["fit"]}　·　节奏：{u["rhythm"]}')
                     st.caption("💡 " + u["tips"])

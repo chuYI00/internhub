@@ -12,17 +12,26 @@
     yunnan.for_me()        # 按"物联网 / 电子信息与自动化"专业筛出的高契合单位
     yunnan.as_text()       # 导出成纯文本（可粘到手机备忘录）
 
-说明：标 `official=True` 的是**已核对过的官方直达**；其余给的是搜索直达（百度/公众号），
-      因为各家官网的招聘栏目地址经常变，搜索直达永远不会 404。
+链接质量（《重构指令》第 2 步）
+------------------------------
+`portal` / `apply` 两个字段**只放企业/单位自己的官方地址**（能做到的由
+`channels.py` 的官方映射自动补上）。原来那些「百度搜索直达」已经被清出这两个字段 ——
+它们点开只是百度结果页，当不了投递入口。
+
+搜索引擎那一条降级成 `search` 字段，页面/导出文本里统一写成
+**「搜索兜底（点开是搜索引擎，不是直达）」**，只用来在官网没有独立招聘栏目时兜底找公告，
+绝不作为主按钮。
 """
 from urllib.parse import quote
 
 
 def bd(kw: str) -> str:
+    """搜索兜底链接（**不是**直达，点开是搜索引擎）。"""
     return "https://www.baidu.com/s?wd=" + quote(kw)
 
 
 def wx(kw: str) -> str:
+    """微信文章搜索兜底（搜狗微信，同样是搜索引擎页）。"""
     return "https://weixin.sogou.com/weixin?type=2&query=" + quote(kw)
 
 
@@ -375,6 +384,47 @@ WEEKLY = [
 ]
 
 
+def _sanitize() -> None:
+    """把伪直达从「官方投递入口」里清出去，能补官方的补上。
+
+    第 2 步重构的核心动作：`portal` / `apply` 只允许企业/单位自己的域名。
+    原来写在里面的 `bd(...)` 一律清空，然后尝试用 channels.py 的官方映射补回来；
+    补不到的就在界面/文本里明确写「该单位没有独立网申页，走公众号/上级统一平台」，
+    而不是塞一条点开是百度的假直达。
+    """
+    from . import channels, linkcheck
+    for u in UNITS:
+        for k in ("portal", "apply"):
+            if linkcheck.is_any_search(u.get(k) or ""):
+                u[k] = ""
+        if not u.get("portal"):
+            u["portal"] = channels.official_for(u["name"]) or ""
+        if not u.get("apply"):
+            u["apply"] = channels.official_for(u["name"]) or ""
+        # 说明里补一句实话，避免用户以为「没链接＝漏了」
+        if not u.get("portal") and not u.get("apply") and "没有独立网申页" not in u["apply_note"]:
+            u["apply_note"] = ("该单位没有独立网申页（走上级集团/公众号统一发布）—— "
+                               "用下面的「搜索兜底」找当期公告。" + (u.get("apply_note") or ""))
+
+
+_sanitize()
+
+
+def official_links(u: dict) -> list:
+    """该单位的**官方**链接（可直接当主按钮）：[(称谓, 链接)]。"""
+    out = []
+    if u.get("portal"):
+        out.append(("官方公告页", u["portal"]))
+    if u.get("apply") and u["apply"] != u.get("portal"):
+        out.append(("网申入口", u["apply"]))
+    return out
+
+
+def has_official(u: dict) -> bool:
+    """有没有拿到官方直达（没有的话界面要写明「搜索兜底」，别让用户以为直达了）。"""
+    return bool(u.get("portal") or u.get("apply"))
+
+
 def all_units():
     return UNITS
 
@@ -404,13 +454,13 @@ def as_text() -> str:
         L.append("-" * 50)
         for u in items:
             L.append(f'【{u["name"]}】契合度 {u["heat"]}')
-            if u["portal"]:
-                L.append("  官方公告：" + u["portal"])
-            if u["apply"]:
-                L.append("  网申入口：" + u["apply"])
+            for what, url in official_links(u):
+                L.append(f"  ✅ {what}（官方直达）：{url}")
+            if not has_official(u):
+                L.append("  ✅ 官方直达：—（该单位没有独立网申页，走上级/公众号统一发布）")
             if u["apply_note"]:
                 L.append("  说明：" + u["apply_note"])
-            L.append("  搜索直达：" + u["search"])
+            L.append("  🔎 搜索兜底（点开是搜索引擎，不是直达）：" + u["search"])
             L.append("  对口岗位：" + u["fit"])
             L.append("  招聘节奏：" + u["rhythm"])
             L.append("  提醒：" + u["tips"])
@@ -420,6 +470,9 @@ def as_text() -> str:
     for d, task, url in WEEKLY:
         L.append(f"{d}：{task}" + (f"　{url}" if url else ""))
     L.append("")
-    L.append("提示：链接可能变动，标「官方直达」的是核对过的，其余给搜索直达（不会 404）。")
+    L.append("链接质量说明（《重构指令》第 2 步）：")
+    L.append("  · 「官方直达」＝ 该单位自己的域名，可直接当投递入口；")
+    L.append("  · 「搜索兜底」＝ 搜索引擎结果页，**只用来找当期公告，不是投递入口**；")
+    L.append("  · 原来的「百度 site: 站内搜」这类伪直达已全部移除。")
     L.append("所有报名要求以官方公告为准；本清单只负责让你不漏公告。")
     return "\n".join(L)
