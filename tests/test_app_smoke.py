@@ -110,10 +110,59 @@ def main() -> int:
         csv_head = exp.to_csv(index=False).splitlines()[0]
         check("导出内容可生成 CSV 表头", len(csv_head) > 5, csv_head[:60])
 
-    print("[3] 没有导出权限时的『粘贴导入』入口")
+    print("[3] v2 导入向导（4 条通道收敛成 1 处）")
+    _chans = [str(r.options) for r in at.radio if "上传" in str(r.options)]
+    check("四条通道都在一个 radio 里", _chans and all(
+        k in _chans[0] for k in ("上传", "复制粘贴", "抓包解码", "截图 OCR")), _chans[:1])
+    check("默认停在通道①，有『上传文件』入口",
+          "wz_file" in [u.key for u in at.get("file_uploader")],
+          [u.key for u in at.get("file_uploader")])
+    # 旧的三处重复入口必须真的删掉（删 UI 但留着 key 就白收敛了）
     ta_keys = [t.key for t in at.text_area]
-    check("有粘贴表格的输入框", "paste_tbl" in ta_keys, ta_keys)
-    check("有『导入粘贴的内容』按钮", "paste_import" in keys, keys[:25])
+    check("旧入口『paste_tbl』已移除", "paste_tbl" not in ta_keys, ta_keys)
+    check("旧入口『csv_qiu』已移除",
+          "csv_qiu" not in [u.key for u in at.get("file_uploader")], None)
+    # 向导绝不能新增 st.tabs（整页必须恰好 4 个页签）
+    check("整页仍然只有 4 个页签（向导没偷偷加 tabs）", len(at.tabs) == 4, len(at.tabs))
+
+    # 每条通道单独切过去看一眼（radio 选了哪条才渲染哪条，所以得逐个跑）
+    def _switch_to(chan, kind):
+        _a = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+        _a.run()
+        _rs = [r for r in _a.radio if "上传" in str(r.options)]
+        if _rs:
+            _rs[0].set_value(chan).run()
+        return [w.key for w in _a.get(kind)], _a
+
+    _k2, _a2 = _switch_to("② 复制粘贴", "text_area")
+    check("通道② 有粘贴输入框", "wz_paste" in _k2, _k2)
+    _k2b, _ = _switch_to("② 复制粘贴", "button")
+    check("通道② 有『解析』按钮", "wz_parse_paste" in _k2b, _k2b[:10])
+    _k3, _ = _switch_to("③ 抓包解码", "button")
+    check("通道③ 有『读取飞书解码 CSV』按钮", "wz_load_decoded" in _k3, _k3[:10])
+    _k4, _ = _switch_to("④ 截图 OCR", "button")
+    check("通道④ 有占位按钮（暂未开放）", "wz_ocr" in _k4, _k4[:10])
+
+    # 端到端：切到通道② → 粘一段 → 点解析 → 应该出现「字段映射 + 确认导入」
+    _a5 = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+    _a5.run()
+    _r5 = [r for r in _a5.radio if "上传" in str(r.options)]
+    if _r5:
+        _r5[0].set_value("② 复制粘贴").run()
+    _ta5 = [t for t in _a5.text_area if t.key == "wz_paste"]
+    if _ta5:
+        _ta5[0].set_value("岗位名称\t公司\t城市\n电气工程师\t云南中烟\t昆明\n").run()
+        _b5 = [b for b in _a5.button if b.key == "wz_parse_paste"]
+        if _b5:
+            _b5[0].click().run()
+    check("解析后无异常", not _a5.exception, [e.value for e in _a5.exception])
+    _sb5 = [s.key for s in _a5.selectbox]
+    check("解析后出现字段映射下拉", "wz_map_title" in _sb5, _sb5[:14])
+    check("映射覆盖全部 7 个标准字段",
+          all(f"wz_map_{f}" in _sb5 for f in
+              ("title", "company", "city", "link", "source_name", "deadline", "note")), _sb5[:14])
+    _b5k = [b.key for b in _a5.button]
+    check("解析后出现『确认导入』按钮", "wz_commit" in _b5k, _b5k[:14])
 
     print("[4] 侧边栏能渲染筛选控件")
     check("快速锁定城市 radio 存在",

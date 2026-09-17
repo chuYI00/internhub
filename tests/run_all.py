@@ -56,6 +56,8 @@ def main() -> int:
         [PY, "tests/test_linkcheck.py"], "链接体检：A/P/B/C/D 分级 + 砍伪直达")
     results["📮 投递台账（烟草 1 单位 1 岗拦截 / 粘贴解析）"] = run(
         [PY, "tests/test_ledger.py"], "投递台账：登记前拦截 + 网申助手回传解析")
+    results["📥 导入向导（4 通道 / 乱列名映射 / 抓包解码 / 去重）"] = run(
+        [PY, "tests/test_wizard.py"], "导入向导：解析 → 映射 → 入库 → 去重")
     results["📚 备考方案生成器（倒推阶段 / 必背清单 / 导出）"] = run(
         [PY, "tests/test_studyplan.py"], "备考方案：按考试日倒推 + 分目标出方案")
     results["CSV 导入链路"] = run(
