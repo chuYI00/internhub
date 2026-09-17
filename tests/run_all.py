@@ -46,6 +46,10 @@ def main() -> int:
         ["node", "tests/autofill_ats_test.js"], "企业自有网申系统（自绘下拉/卡片单选）")
     results["网申助手（油猴版）"] = run(
         ["node", "tests/autofill_dom_test.js"], "网申助手 .user.js")
+    results["网申助手 v5（70 字段 / 三级识别 / 字段学习）"] = run(
+        ["node", "tests/autofill_v5_test.js"], "网申助手 v5：国企特色字段 + 填充报告 + 教一次会记")
+    results["网申助手 · 真实浏览器验收（北森/Moka/国企三种结构）"] = run(
+        [PY, "tests/autofill_browser_test.py"], "真实 Chrome/Edge 跑三种网申页面，看填充率与识别率")
     results["采集书签（免插件版）"] = run(
         ["node", "tests/bookmarklet_test.js"], "采集书签 采集书签.txt")
     results["采集链路（跳转壳解码 + 数据源并集 + 官网匹配）"] = run(
@@ -62,6 +66,8 @@ def main() -> int:
         [PY, "tests/test_studyplan.py"], "备考方案：按考试日倒推 + 分目标出方案")
     results["CSV 导入链路"] = run(
         [PY, "tests/test_import_csv.py"], "CSV 导入 → 入库")
+    results["🧭 岗位列表（排序 / 城市多选 / 报名中 / 发布时间兜底 / 临期标红）"] = run(
+        [PY, "tests/test_joblist.py"], "岗位页：排序筛选 + 发布时间不许为空")
     results["网页端冒烟（4 个页签 + 页签对齐 + 广投按钮）"] = run(
         [PY, "tests/test_app_smoke.py"], "Streamlit 无头渲染")
     results["简历定制链路"] = run(

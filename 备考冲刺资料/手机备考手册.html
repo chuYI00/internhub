@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#12161c">
+<title>烟草备考 · 手机手册</title>
+<style>
+:root{
+  --bg:#0f1319; --bg2:#161b23; --card:#1b212b; --card2:#222935;
+  --tx:#e8edf4; --tx2:#a3b0c2; --tx3:#6d7c90;
+  --line:#2b3441; --acc:#4a9eff; --acc2:#0f2a45;
+  --ok:#31c46b; --warn:#ffb020; --bad:#ff5d5d;
+  --r:14px; --nav:calc(58px + env(safe-area-inset-bottom));
+}
+html[data-theme="light"]{
+  --bg:#f2f4f7; --bg2:#fff; --card:#fff; --card2:#f7f9fb;
+  --tx:#1a2230; --tx2:#5a6879; --tx3:#93a0b0;
+  --line:#e3e8ef; --acc:#1e6fd9; --acc2:#e8f1fd;
+  --ok:#17a34a; --warn:#c77700; --bad:#d63b3b;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--tx);
+  font:15px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  padding-bottom:var(--nav); overflow-x:hidden;
+}
+img{max-width:100%}
+a{color:var(--acc);text-decoration:none}
+
+/* ---------- 顶栏 ---------- */
+header{
+  position:sticky;top:0;z-index:50;background:var(--bg);
+  padding:calc(10px + env(safe-area-inset-top)) 14px 8px;
+  border-bottom:1px solid var(--line);
+}
+.hrow{display:flex;align-items:center;gap:8px}
+h1{font-size:17px;margin:0;flex:1;font-weight:700;letter-spacing:.5px}
+h1 small{display:block;font-size:11px;color:var(--tx3);font-weight:400;letter-spacing:0}
+.iconbtn{
+  width:34px;height:34px;border:1px solid var(--line);background:var(--card);
+  color:var(--tx);border-radius:10px;font-size:16px;display:flex;
+  align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto
+}
+#search{
+  width:100%;margin-top:9px;padding:9px 12px;border-radius:10px;
+  border:1px solid var(--line);background:var(--card);color:var(--tx);font-size:14px
+}
+#search::placeholder{color:var(--tx3)}
+
+/* ---------- 主体 ---------- */
+main{padding:12px 12px 24px;max-width:640px;margin:0 auto}
+.page{display:none;animation:fade .18s ease}
+.page.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
+
+.sec{font-size:12px;color:var(--tx3);margin:18px 2px 8px;font-weight:600;letter-spacing:1px}
+.sec:first-child{margin-top:4px}
+
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  margin-bottom:9px;overflow:hidden
+}
+.card>summary{
+  padding:13px 14px;font-size:15px;font-weight:600;cursor:pointer;
+  list-style:none;display:flex;align-items:center;gap:8px;user-select:none
+}
+.card>summary::-webkit-details-marker{display:none}
+.card>summary::after{content:"▾";margin-left:auto;color:var(--tx3);font-size:12px;transition:.2s}
+.card[open]>summary::after{transform:rotate(180deg)}
+.card>summary .tag{
+  font-size:10px;font-weight:500;padding:2px 6px;border-radius:5px;
+  background:var(--acc2);color:var(--acc);margin-left:auto;flex:0 0 auto
+}
+.card[open]>summary .tag{display:none}
+.card>summary .done{font-size:13px;flex:0 0 auto}
+.body{padding:0 14px 14px;font-size:14px;color:var(--tx2)}
+.body p{margin:8px 0}
+.body b,.body strong{color:var(--tx)}
+.body ul{margin:6px 0;padding-left:20px}
+.body li{margin:5px 0}
+.body table{width:100%;border-collapse:collapse;margin:8px 0;font-size:13px}
+.body td,.body th{border:1px solid var(--line);padding:7px 8px;text-align:left}
+.body th{background:var(--card2);color:var(--tx)}
+.hl{color:var(--warn);font-weight:600}
+.red{color:var(--bad);font-weight:600}
+.grn{color:var(--ok);font-weight:600}
+.k{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:7px 0;font-size:13.5px;color:var(--tx)}
+.k b{color:var(--acc)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+
+/* 今日任务勾选 */
+.task{display:flex;align-items:flex-start;gap:11px;padding:13px 14px;cursor:pointer}
+.task:active{background:var(--card2)}
+.task .box{
+  width:21px;height:21px;flex:0 0 auto;border:2px solid var(--tx3);border-radius:6px;
+  margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:13px;color:transparent
+}
+.task.ck .box{background:var(--ok);border-color:var(--ok);color:#fff}
+.task.ck .t1{text-decoration:line-through;color:var(--tx3)}
+.t1{font-size:14.5px;color:var(--tx);font-weight:500}
+.t2{font-size:12px;color:var(--tx3);margin-top:2px}
+
+/* 统计条 */
+.hero{
+  background:linear-gradient(135deg,var(--acc2),var(--card));border:1px solid var(--line);
+  border-radius:var(--r);padding:14px;margin-bottom:10px
+}
+.hero .big{font-size:30px;font-weight:800;color:var(--acc);line-height:1.1}
+.hero .sub{font-size:12.5px;color:var(--tx2);margin-top:3px}
+.stats{display:flex;gap:8px;margin-top:11px}
+.stat{flex:1;background:var(--bg2);border-radius:10px;padding:8px;text-align:center}
+.stat b{display:block;font-size:17px;color:var(--tx)}
+.stat span{font-size:10.5px;color:var(--tx3)}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:10px}
+.bar i{display:block;height:100%;background:var(--ok);width:0;transition:.3s}
+
+/* 底部导航 */
+nav{
+  position:fixed;left:0;right:0;bottom:0;z-index:60;display:flex;
+  background:var(--bg);border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom)
+}
+nav button{
+  flex:1;background:none;border:0;color:var(--tx3);padding:7px 0 6px;
+  font-size:10.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px
+}
+nav button i{font-size:19px;font-style:normal;line-height:1}
+nav button.on{color:var(--acc)}
+
+.toast{
+  position:fixed;left:50%;bottom:calc(var(--nav) + 16px);transform:translateX(-50%) translateY(20px);
+  background:var(--tx);color:var(--bg);padding:9px 16px;border-radius:20px;font-size:13px;
+  z-index:99;opacity:0;transition:.25s;pointer-events:none;white-space:nowrap
+}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.hide{display:none!important}
+.foot{text-align:center;font-size:11px;color:var(--tx3);padding:20px 0 6px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hrow">
+    <h1>🍃 云南烟草备考手册<small id="sub">2027 届 · 中国民航大学 · 物联网工程</small></h1>
+    <button class="iconbtn" id="theme" title="夜间/日间">🌙</button>
+  </div>
+  <input id="search" placeholder="🔍 搜知识点，比如「基期」「烟草专卖法」">
+</header>
+
+<main>
+  <div class="page on" id="p-today"></div>
+  <div class="page" id="p-mem"></div>
+  <div class="page" id="p-quiz"></div>
+  <div class="page" id="p-major"></div>
+  <div class="page" id="p-iv"></div>
+  <div class="page" id="p-tips"></div>
+  <div class="foot">以官方公告为准 · 本地文件，不联网<br>国家烟草专卖局人才招聘专栏 tobacco.gov.cn</div>
+</main>
+
+<nav>
+  <button data-p="today" class="on"><i>🗓</i>今日</button>
+  <button data-p="mem"><i>🧠</i>必背</button>
+  <button data-p="quiz"><i>✏️</i>刷题</button>
+  <button data-p="major"><i>🔧</i>专业</button>
+  <button data-p="iv"><i>💬</i>面试</button>
+  <button data-p="tips"><i>⚠️</i>避坑</button>
+</nav>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ 配置 ============ */
+var EXAM = new Date(2026,11,15);              // 预估笔试日 2026-12-15（出公告后改这里）
+var STAGES = [
+  {s:new Date(2026,8,17),  e:new Date(2026,9,7),   n:"阶段一 · 基础速成", h:"2 小时", d:"建手感 + 过一遍公基"},
+  {s:new Date(2026,9,8),   e:new Date(2026,9,31),  n:"阶段二 · 强化刷题", h:"2 小时", d:"限时成组刷 + 专业科目"},
+  {s:new Date(2026,10,1),  e:new Date(2027,0,31),  n:"阶段三 · 模考冲刺", h:"2 小时", d:"整卷模考 + 只刷错题"}
+];
+
+/* 今日任务（按阶段切换） */
+var TASKS = {
+  0:[
+    ["资料分析","背一遍公式表 + 2 篇材料 10 题 · 30 分钟","目标正确率 75%，每题 ≤60 秒"],
+    ["判断推理","图推 20 题 + 逻辑公式背 1 遍 · 25 分钟","40 秒没思路立刻跳过"],
+    ["言语理解","片段 10 题 + 选词 5 题 · 15 分钟","保语感，不抠难题"],
+    ["公基背诵","省情 / 烟草 / 公文 / 法律 按天轮换 · 40 分钟","见「必背」页，点开读一遍"],
+    ["错题复盘","当天错的当天看 · 10 分钟","同类错 2 次标为重点"]
+  ],
+  1:[
+    ["行测限时","资料 / 判断 / 言语 成组掐表 · 70 分钟","一组一组掐，别散着刷"],
+    ["专业科目","电路 / 数电 / 单片机 / 计网 轮换 · 30 分钟","见「专业」页清单"],
+    ["公基滚动","背诵 + 刷题 · 20 分钟","云南时政每天扫一眼"]
+  ],
+  2:[
+    ["整卷模考","隔天 1 套，限时做完 · 120 分钟","练「难题直接跳过」"],
+    ["时政与申论","云南时政 + 烟草动态 + 金句 · 20 分钟","学习强国 10 分钟"],
+    ["只看错题","考前 5 天不学新内容","错题本每天过一遍"]
+  ]
+};
+
+/* ============ 必背卡 ============ */
+var MEM = [
+{ t:"资料分析 · 必背公式", tag:"行测", items:[
+  "基期量 = 现期 ÷ (1 + 增长率)",
+  "增长量 = 现期 − 基期 = 现期 × 增长率 ÷ (1 + 增长率)",
+  "增长率 = 增长量 ÷ 基期 = 现期 ÷ 基期 − 1",
+  "比重 = 部分 ÷ 整体",
+  "比重升降：部分增速 > 整体增速 → 比重<b>上升</b>",
+  "平均数增长率 = (1+总量增速) ÷ (1+份数增速) − 1",
+  "A 是 B 的几倍 = A÷B；A 比 B <b>多</b>几倍 = A÷B − 1",
+  "年均增长率 ≈ (末期÷基期 − 1) ÷ n",
+  "混合增长率：介于两部分之间，更靠近<b>基数大</b>的那部分"
+]},
+{ t:"速算三招 + 特征数字", tag:"行测", items:[
+  "<b>截位直除</b>：分母只截 3~4 位，够选答案就行",
+  "<b>特征数字法</b>（背下来）：1/7≈14.3%、1/9≈11.1%、1/11≈9.1%、1/12≈8.3%、1/13≈7.7%、1/14≈7.1%、1/15≈6.7%、1/16=6.25%",
+  "<b>同位比较法</b>：两个分数比大小，先看量级再看首位",
+  "固定动作：看问题 → 定位数据 → 列式 → 截位直除 → 选最接近项"
+]},
+{ t:"图形推理 · 高频 5 类", tag:"行测", items:[
+  "<b>对称性</b>：轴对称 / 中心对称 / 对称轴数量与方向",
+  "<b>数量关系</b>：面、线、交点、笔画数（一笔画看奇点个数 0 或 2）",
+  "<b>位置规律</b>：平移、旋转、翻转",
+  "<b>样式规律</b>：遍历、叠加、去同存异 / 去异存同",
+  "<b>立体图形</b>：相对面不相邻、相邻面不相对",
+  "⚠️ <b>40 秒没思路立刻跳过</b>，图推不能恋战"
+]},
+{ t:"逻辑判断 · 背公式就得分", tag:"行测", items:[
+  "「如果 A 则 B」→ <b>A ⇒ B</b>（肯前必肯后、否后必否前）",
+  "「只有 A 才 B」→ <b>B ⇒ A</b>",
+  "「除非 A 否则 B」→ <b>¬A ⇒ B</b>",
+  "矛盾关系：A ↔ ¬A；「所有是」↔「有些非」",
+  "加强/削弱力度：<b>搭桥/拆桥 > 举例 > 数据</b>",
+  "定义判断抓四要素：<b>主体 + 行为 + 对象 + 条件</b>",
+  "类比推理：先定内部关系（并列/包含/对应/语义），再看词性、感情色彩"
+]},
+{ t:"言语理解 · 高频成语", tag:"行测", items:[
+  "中心句常在这些位置：<b>首尾句、转折之后、递进之后、结论词之后</b>（因此/可见/总之）",
+  "逻辑填空两步：先看<b>语境</b>（并列/转折/递进/解释），再辨<b>词义侧重、搭配对象、感情色彩</b>",
+  "必背成语：相辅相成、层出不穷、潜移默化、不谋而合、推陈出新、独树一帜、不可或缺、至关重要、因地制宜、循序渐进"
+]},
+{ t:"云南省情（高频送分）", tag:"公基", items:[
+  "面积 <b>39.4 万 km²</b>，常住人口约 <b>4700 万</b>，下辖 <b>16 个州市</b>，省会昆明",
+  "与 <b>缅甸、老挝、越南</b> 接壤，陆地边境线约 4000 多 km，25 个边境县（市）",
+  "三个定位：<b>民族团结进步示范区、生态文明建设排头兵、面向南亚东南亚辐射中心</b>",
+  "发展提法：资源经济、园区经济、口岸经济；<b>「3815」战略发展目标</b>",
+  "支柱产业：烟草、旅游、电力（绿色能源）、有色金属、生物资源；<b>中老铁路</b>",
+  "<b>云南是全国最大烤烟产区</b>，「两烟」（烤烟、卷烟）产量长期居全国首位"
+]},
+{ t:"烟草行业常识（必考）", tag:"公基", items:[
+  "管理体制：<b>统一领导、垂直管理、专卖专营</b>",
+  "国家烟草专卖局与中国烟草总公司 <b>一套机构、两块牌子</b>",
+  "《烟草专卖法》<b>1992 年 1 月 1 日</b>施行（1991 年通过）",
+  "许可证制度：生产、批发、零售、运输均需许可；运输需<b>准运证</b>",
+  "烟草专卖品范围：卷烟、雪茄烟、烟丝、复烤烟叶、烟叶、<b>卷烟纸、滤嘴棒、烟用丝束、烟草专用机械</b>",
+  "包装必须标<b>焦油量、烟碱量</b>及「吸烟有害健康」；禁止在广播电台、电视台播烟草广告；禁止向未成年人售烟",
+  "<b>电子烟已纳入烟草专卖监管</b>（《电子烟管理办法》）",
+  "云南主要工业企业：<b>云南中烟工业有限责任公司</b>（下辖红塔集团、红云红河集团等）",
+  "主要品牌：<b>红塔山、玉溪、云烟、红河、红梅</b>"
+]},
+{ t:"公文基础（高频）", tag:"公基", items:[
+  "15 种法定公文：决议、决定、命令（令）、公报、公告、通告、意见、通知、通报、报告、请示、批复、议案、函、纪要",
+  "行文规则：<b>请示一事一文</b>；不得越级行文；<b>报告中不得夹带请示事项</b>；双重领导机关行文写明主送与抄送",
+  "标题格式：<b>发文机关 + 事由 + 文种</b>；成文日期用<b>阿拉伯数字</b>"
+]},
+{ t:"法律高频数字", tag:"公基", items:[
+  "宪法修改：全国人大全体代表 <b>2/3</b> 以上多数通过",
+  "民法典：<b>离婚冷静期 30 天</b>",
+  "劳动合同法：3 年以上合同试用期不超过 <b>6 个月</b>；竞业限制不超过 <b>2 年</b>",
+  "公务员法处分：警告、记过、记大过、降级、撤职、开除 —— <b>没有「罚款」</b>",
+  "行政处罚：警告、罚款、没收、责令停产停业、暂扣吊销许可证、行政拘留"
+]},
+{ t:"数量关系 · 只练这 3 类", tag:"行测", items:[
+  "<b>工程问题</b>：设总量为 1 或公倍数，效率 = 总量÷时间",
+  "<b>行程问题</b>：相遇 S=(v1+v2)t、追及 S=(v1−v2)t、流水 v顺=v船+v水",
+  "<b>利润问题</b>：利润=售价−成本，利润率=利润÷成本，打几折就是×零点几",
+  "其余难题 <b>统一蒙同一个选项</b>，把时间还给资料分析"
+]}
+];
+
+/* ============ 专业科目 ============ */
+var MAJOR = [
+["电路与电子技术","基本电路定律（KCL/KVL）、二极管/三极管特性、运算放大器基础（虚短虚断）"],
+["数字电路","逻辑门真值表、触发器（D/JK）、编码器/译码器、时序逻辑与组合逻辑区别"],
+["信号与系统","信号分类（连续/离散、周期/非周期）、傅里叶变换概念、<b>采样定理（fs ≥ 2fm）</b>"],
+["自动控制","开环 vs 闭环、<b>PID 三段各自作用</b>（P 快、I 消除稳态误差、D 抑制超调）、传递函数概念"],
+["单片机与嵌入式","<b>STM32 结构</b>、GPIO/中断/定时器、<b>UART / I2C / SPI 三种总线区别</b>（同步异步、线数、速率）"],
+["传感器与检测","常用传感器原理（温度/压力/光电/霍尔）、信号调理、A/D 转换与分辨率"],
+["计算机网络","OSI 七层 vs TCP/IP 四层、常用端口（80/443/22/21/25/3306）、TCP 三次握手、子网划分"],
+["数据库","SQL 基本语句（增删改查、聚合、JOIN）、<b>事务 ACID</b>、索引作用、范式"],
+["通信原理","调制方式（ASK/FSK/PSK）、信道复用（时分/频分/码分）、误码率概念"]
+];
+
+/* ============ 面试 ============ */
+var IV = [
+["为什么选择烟草行业？","云南支柱产业 + 自动化/信息化能落地 + 长期在云南发展。<b>别说「待遇好/稳定」</b>"],
+["你学校是民航大学，为什么不去机场？","民航背景给了我严谨和规范化意识；但我更想在<b>制造业与自动化</b>方向深耕，中烟的设备运维/智能产线正是这个方向"],
+["你的专业和岗位有什么关联？","举 STM32 + ROS2 项目：设备数据采集、通信、状态上报、远程控制 —— 就是设备运维的逻辑"],
+["能接受下车间 / 倒班 / 去州市吗？","<b>必须明确接受</b>。这是必问，犹豫就会被刷"],
+["遇到设备故障怎么排查？","讲真实例子：ROS2 项目里通信丢包，怎么定位到节点启动时序问题"],
+["你怎么看待「重复投递取消资格」这类规则？","体现规则意识：我投递前会用台账核对自己投过哪些岗，避免违规"],
+["你最大的缺点？","选真实但可改进的：如「以前只关注技术实现，现在会先想用户场景」"],
+["有没有投其他单位？","坦诚：投了云南本地国企和电网/运营商，但<b>最想来这里</b>，并说明理由"]
+];
+var STAR = [
+["机场智能巡检机器人","系统集成与联调 → 证明<b>故障排查能力</b>"],
+["OpenHarmony + 华为云 IoT","从零搭环境到端云闭环 → 证明<b>自学与动手能力</b>"],
+["ROS2 智能小车","调参把膨胀半径压到 0.05 m → 证明<b>钻研与优化意识</b>"],
+["政府办公室实习","文件归档 100+ 份、群众问题 20+ 件 → 证明<b>规范、细致、服务意识</b>"],
+["自研 InternHub 工具","因为自己填网申太慢而写工具 → <b>发现问题 + 解决问题 + AI 工具能力</b>"]
+];
+var MATS = [
+"身份证正反面","免冠证件照（≤500KB，白底/蓝底按公告）","学信网《教育部学籍在线验证报告》（注意有效期）",
+"就业推荐表（学院盖章）","在校成绩单（学院盖章）","证书扫描件：CET-4 / CET-6、奖学金、竞赛",
+"实习 / 项目证明（可选，加分）","个人诚信承诺书（部分单位需手写签字）"
+];
+
+/* ============ 工具 ============ */
+function $(s){return document.querySelector(s)}
+function el(t,h){var d=document.createElement(t);d.innerHTML=h;return d}
+function LSK(d){return "ihub_study_"+d}
+function today(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function get(k,f){try{return JSON.parse(localStorage.getItem(k))||f}catch(e){return f}}
+function set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function toast(m){var t=$("#toast");t.textContent=m;t.classList.add("on");clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove("on")},1600)}
+
+/* 阶段 */
+function stageIdx(){
+  var n=new Date(); n.setHours(0,0,0,0);
+  for(var i=0;i<STAGES.length;i++){ if(n>=STAGES[i].s && n<=STAGES[i].e) return i; }
+  if(n<STAGES[0].s) return 0;
+  return STAGES.length-1;
+}
+/* 连续打卡 */
+function streak(){
+  var n=0,d=new Date();
+  for(var i=0;i<400;i++){
+    var k=LSK(fmt(d)), v=get(k,null);
+    if(v && v.n){ n++; d.setDate(d.getDate()-1); } else { if(i===0){d.setDate(d.getDate()-1);continue} break; }
+  }
+  return n;
+}
+function fmt(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+
+/* ============ 今日 ============ */
+function renderToday(){
+  var si=stageIdx(), st=STAGES[si], k=LSK(today());
+  var done=get(k,{});
+  var days=Math.max(0,Math.ceil((EXAM-new Date())/86400000));
+  var list=TASKS[si], dn=0;
+  list.forEach(function(t,i){ if(done["t"+i]) dn++; });
+  var pct=Math.round(dn/list.length*100);
+
+  var h='<div class="hero">'+
+    '<div class="big">'+days+' <span style="font-size:15px;font-weight:500">天</span></div>'+
+    '<div class="sub">距预估笔试 2026-12-15 · <b class="hl">'+st.n+'</b> · 每天 '+st.h+'</div>'+
+    '<div class="sub">'+st.d+'</div>'+
+    '<div class="stats">'+
+      '<div class="stat"><b>'+dn+'/'+list.length+'</b><span>今日任务</span></div>'+
+      '<div class="stat"><b>'+streak()+'</b><span>连续天数</span></div>'+
+      '<div class="stat"><b>'+memDone()+'/'+MEM.length+'</b><span>必背已过</span></div>'+
+    '</div><div class="bar"><i style="width:'+pct+'%"></i></div></div>';
+
+  h+='<div class="sec">今天该做什么（点一下打勾）</div><div class="card">';
+  list.forEach(function(t,i){
+    var ck=done["t"+i]?" ck":"";
+    h+='<div class="task'+ck+'" data-i="'+i+'"><div class="box">✓</div><div><div class="t1">'+t[0]+'　<span style="font-size:11px;color:var(--tx3)">'+t[1]+'</span></div><div class="t2">'+t[2]+'</div></div></div>';
+  });
+  h+='</div>';
+
+  h+='<div class="sec">三条铁律</div><div class="card"><div class="body">'+
+    '<div class="k"><b>1.</b> 错题复盘 &gt; 刷新题。同类题错两次就标重点，每天过一遍。</div>'+
+    '<div class="k"><b>2.</b> 每天至少 1 小时，<b>断更不超过 2 天</b>。行测手感和公基记忆衰减极快。</div>'+
+    '<div class="k"><b>3.</b> 放弃要有纪律：数量难题、冷门文史、计算机底层 —— 不投入，考场统一蒙。</div>'+
+    '</div></div>';
+
+  h+='<div class="sec">时间轴</div><div class="card"><div class="body"><table>'+
+   '<tr><th>时间</th><th>事件</th></tr>'+
+   '<tr><td><b>现在</b></td><td>秋招提前批，部分技术岗可免笔试 → <b>立刻复习 + 盯公告</b></td></tr>'+
+   '<tr><td>10 月</td><td>各省烟草预热，南方电网同步开网申 → 备齐材料</td></tr>'+
+   '<tr><td><b>11 月</b></td><td><b>网申高峰</b>，全年最重要一个月 → 公告一出 48 小时内投完</td></tr>'+
+   '<tr><td><b>12 月</b></td><td><b>统一笔试</b> → 全真模考，只刷错题</td></tr>'+
+   '<tr><td>1 月</td><td>面试、公示 → 结构化面试准备</td></tr>'+
+   '</table><p class="hl">⚠️ 网申窗口通常只有 7–10 天，初审 3–7 个工作日，初审没过<b>不能再次投递同省岗位</b>。</p></div></div>';
+
+  h+='<div class="sec">时间紧怎么办（先看这段）</div><div class="card"><div class="body">'+
+    '<div class="k"><b>只有 1 小时：</b>资料分析 2 篇（20′）+ 公基读 1 组（20′）+ 图推 10 题（10′）+ 错题（10′）。<b>别碰数量关系。</b></div>'+
+    '<div class="k"><b>只有 30 分钟：</b>资料分析 2 篇（20′）+ 背 1 组必背卡（10′）。资料分析是唯一「练了就一定涨分」的模块。</div>'+
+    '<div class="k"><b>断更了几天：</b>不要补旧账，直接接着今天的做。补昨天的只会让你更不想开始。</div>'+
+    '<div class="k"><b>通勤/睡前碎片时间：</b>只做两件事 —— 过「必背」卡片、刷 10 道图推。别在手机上做资料分析（要动笔）。</div>'+
+    '<div class="k grn"><b>投入顺序（时间越少越要照这个来）：</b>资料分析 → 判断推理 → 公基背诵 → 言语 → 专业科目 → <span class="red">数量关系（可全弃）</span>。</div>'+
+    '</div></div>';
+
+  h+='<div class="sec">每日一问（睡前 30 秒）</div><div class="card"><div class="body">'+
+    '<p>① 今天错的题，<b>同类题我能不能讲清楚为什么错</b>？讲不清 = 明天重做。<br>'+
+    '② 今天背的公基，<b>现在闭眼能说出 3 条吗</b>？说不出 = 明早再看一遍。<br>'+
+    '③ 网申台账看了吗？<b>有没有漏掉的公告</b>？</p></div></div>';
+
+  $("#p-today").innerHTML=h;
+  Array.prototype.forEach.call($("#p-today").querySelectorAll(".task"),function(x){
+    x.onclick=function(){
+      var i=x.dataset.i, d=get(k,{});
+      d["t"+i]=!d["t"+i]; set(k,d);
+      x.classList.toggle("ck",!!d["t"+i]);
+      var n=0; Object.keys(d).forEach(function(kk){if(d[kk])n++});
+      $("#p-today .bar i").style.width=Math.round(n/list.length*100)+"%";
+      $("#p-today .stat b").textContent=n+"/"+list.length;
+      if(n===list.length) toast("今天全部完成 🎉 连续 "+streak()+" 天");
+    };
+  });
+}
+function memDone(){var m=get("ihub_mem",{}),n=0;Object.keys(m).forEach(function(k){if(m[k])n++});return n}
+
+/* ============ 必背 ============ */
+function renderMem(){
+  var m=get("ihub_mem",{});
+  var h='<div class="hero"><div class="big">'+memDone()+' / '+MEM.length+'</div>'+
+    '<div class="sub">点标题展开，读完点「记住了」打勾 · 进度存本机</div>'+
+    '<div class="bar"><i style="width:'+Math.round(memDone()/MEM.length*100)+'%"></i></div></div>';
+  h+='<div class="sec">全部必背（共 '+MEM.length+' 组）</div>';
+  MEM.forEach(function(g,gi){
+    var ck=m["m"+gi]?" ✅":"";
+    h+='<details class="card" data-m="'+gi+'"><summary><span>'+g.t+'</span><span class="tag">'+g.tag+'</span><span class="done">'+ck+'</span></summary>'+
+       '<div class="body"><ul>'+g.items.map(function(x){return "<li>"+x+"</li>"}).join("")+'</ul>'+
+       '<div class="k" style="text-align:center;cursor:pointer" data-ok="'+gi+'">👆 点这里标记「记住了」</div></div></details>';
+  });
+  $("#p-mem").innerHTML=h;
+  Array.prototype.forEach.call($("#p-mem").querySelectorAll("[data-ok]"),function(x){
+    x.onclick=function(){
+      var i=x.dataset.ok, m=get("ihub_mem",{});
+      m["m"+i]=!m["m"+i]; set("ihub_mem",m);
+      toast(m["m"+i]?"已记住 ✅":"已取消");
+      var d=x.closest("details"); d.querySelector(".done").textContent=m["m"+i]?" ✅":"";
+      $("#p-mem .bar i").style.width=Math.round(memDone()/MEM.length*100)+"%";
+      $("#p-mem .big").textContent=memDone()+" / "+MEM.length;
+    };
+  });
+}
+
+/* ============ 刷题 ============ */
+function renderQuiz(){
+  var h='<div class="sec">各模块每天怎么刷（按投入产出比排）</div>';
+  h+='<details class="card" open><summary>① 资料分析 · 每天 30 分钟<span class="tag">最该抢分</span></summary><div class="body">'+
+    '<p><b>动作：</b>背公式表 → 2 篇材料 → 10 题。<b>每题 ≤60 秒。</b></p>'+
+    '<p><b>目标正确率：</b><span class="grn">75% 起步，冲刺 85%</span>。这是唯一「练了就一定涨分」的模块。</p>'+
+    '<p><b>练什么：</b>截位直除、特征数字、同位比较（见「必背」页）。</p></div></details>';
+  h+='<details class="card"><summary>② 判断推理 · 每天 25 分钟<span class="tag">次之</span></summary><div class="body">'+
+    '<p><b>动作：</b>图推 20 题（40 秒没思路就跳）+ 逻辑公式背 1 遍。</p>'+
+    '<p><b>目标正确率：</b>70%。图推靠<b>认脸</b>（见 5 类高频），逻辑判断背完公式基本白送。</p>'+
+    '<p>定义判断抓四要素，类比先定内部关系。</p></div></details>';
+  h+='<details class="card"><summary>③ 公基 · 每天 20~40 分钟<span class="tag">纯背</span></summary><div class="body">'+
+    '<p>云南省情 / 烟草常识 / 公文 / 法律 <b>按天轮换</b>，见「必背」页。<b>滚动背</b>：今天背新的，明早复习昨天的。</p>'+
+    '<p>目标正确率 65% —— 公基范围无限大，背到高频就够，别贪。</p></div></details>';
+  h+='<details class="card"><summary>④ 言语理解 · 每天 15 分钟<span class="tag">保语感</span></summary><div class="body">'+
+    '<p>片段 10 题 + 选词 5 题。<b>不抠难题</b>，靠语感，错了看解析里词语的搭配对象。</p></div></details>';
+  h+='<details class="card"><summary>⑤ 专业科目 · 每天 30 分钟<span class="tag">你的优势</span></summary><div class="body">'+
+    '<p>见「专业」页清单。你是<b>复习</b>不是从零学 —— 这是你相对文科考生最大的护城河。</p></div></details>';
+  h+='<details class="card"><summary>⑥ 数量关系 · 战略性放弃<span class="tag">可弃</span></summary><div class="body">'+
+    '<p class="red">除工程、行程、利润三类送分题外，其余<b>统一蒙同一个选项</b>，省下的时间给资料分析。</p></div></details>';
+
+  h+='<div class="sec">分值结构（参考往年）</div><div class="card"><div class="body"><table>'+
+    '<tr><th>科目</th><th>占比</th><th>目标</th></tr>'+
+    '<tr><td><b>行测</b></td><td>55–60%</td><td class="grn">70%+</td></tr>'+
+    '<tr><td>公共基础知识</td><td>25–30%</td><td>65%</td></tr>'+
+    '<tr><td>专业科目</td><td>10–15%</td><td class="grn">70%</td></tr>'+
+    '<tr><td>申论/写作</td><td>视公告</td><td>套模板</td></tr>'+
+    '</table></div></div>';
+
+  h+='<div class="sec">模考阶段（11 月起）</div><div class="card"><div class="body">'+
+    '<div class="k"><b>隔天 1 套</b>整卷限时模考，练「难题直接跳过」的手感。</div>'+
+    '<div class="k"><b>每天 20 分钟</b>云南时政 + 烟草行业动态 + 申论金句。</div>'+
+    '<div class="k red"><b>考前 5 天只看错题本</b>，不学任何新内容。</div></div></div>';
+
+  h+='<div class="sec">题库 / APP</div><div class="card"><div class="body">'+
+    '<p>📱 <a href="https://fenbi.com">粉笔</a>　行测模块刷题 + 每周模考（<b>主力</b>）<br>'+
+    '📱 <a href="https://www.huatu.com">华图在线</a>　行测/公基题库、免费直播<br>'+
+    '📱 <a href="https://www.offcn.com">中公题库</a>　公基背诵、时政<br>'+
+    '📱 <a href="https://www.xuexi.cn">学习强国</a>　时政，<b>每天 10 分钟性价比最高</b><br>'+
+    '📺 <a href="https://www.bilibili.com">B 站</a>　搜「行测 资料分析」「公基 云南」</p>'+
+    '<p>真题：牛客网搜「烟草」；粉笔 APP 练模块。<b>少买押题卷，多刷国考/省考行测真题</b>（烟草行测与之同源）。</p></div></div>';
+  $("#p-quiz").innerHTML=h;
+}
+
+/* ============ 专业 ============ */
+function renderMajor(){
+  var m=get("ihub_major",{});
+  var n=0; MAJOR.forEach(function(x,i){if(m["x"+i])n++});
+  var h='<div class="hero"><div class="big">'+n+' / '+MAJOR.length+'</div>'+
+   '<div class="sub">点开复习，过完打勾 · 这是你的护城河</div>'+
+   '<div class="bar"><i style="width:'+Math.round(n/MAJOR.length*100)+'%"></i></div></div>';
+  h+='<div class="sec">专业课复习清单</div><div class="card">';
+  MAJOR.forEach(function(x,i){
+    h+='<div class="task'+(m["x"+i]?" ck":"")+'" data-mj="'+i+'"><div class="box">✓</div><div><div class="t1">'+x[0]+'</div><div class="t2">'+x[1]+'</div></div></div>';
+  });
+  h+='</div>';
+  h+='<div class="sec">怎么复习</div><div class="card"><div class="body">'+
+    '<div class="k">把大学主修课的<b>期末复习资料再过一遍</b>就够了 —— 不要重新啃教材。</div>'+
+    '<div class="k">用你简历里的 <b>STM32 / OpenHarmony / ROS2 项目</b>当「活的例子」去理解概念，<b>面试时能直接讲</b>。</div>'+
+    '<div class="k grn">他们要在两三个月里从零学数字电路，而你是复习。</div></div></div>';
+  $("#p-major").innerHTML=h;
+  Array.prototype.forEach.call($("#p-major").querySelectorAll("[data-mj]"),function(x){
+    x.onclick=function(){
+      var i=x.dataset.mj,m=get("ihub_major",{});
+      m["x"+i]=!m["x"+i]; set("ihub_major",m); x.classList.toggle("ck",!!m["x"+i]);
+      var n=0;MAJOR.forEach(function(_,j){if(m["x"+j])n++});
+      $("#p-major .bar i").style.width=Math.round(n/MAJOR.length*100)+"%";
+      $("#p-major .big").textContent=n+" / "+MAJOR.length;
+    };
+  });
+}
+
+/* ============ 面试 ============ */
+function renderIv(){
+  var h='<div class="sec">三分钟自我介绍（照这个背）</div><details class="card" open><summary>点开看全文</summary><div class="body"><div class="k">'+
+    '各位考官好，我是罗广睿，中国民航大学<b>电子信息与自动化学院</b>物联网工程专业 2027 届本科生。<br><br>'+
+    '在校期间成绩优良、无挂科，<b>连续三年获得校级人民奖学金</b>，已通过 CET-4、CET-6。<br><br>'+
+    '专业上我做了两件「能落地」的事：一是在课程综合设计中参与<b>基于 ROS 与 AI 的机场智能巡检机器人</b>，负责整车系统集成与联调，把 STM32 的底层采集、蓝牙串口通信和 ROS2 的 SLAM 建图、定点导航整条链路打通；二是独立完成了 <b>OpenHarmony + 华为云 IoT</b> 的端云项目，从环境搭建、系统裁剪到 MQTT 接入、远程指令下发全流程自己做了一遍。<br><br>'+
+    '我做事的特点是「不满足于跑通 demo」，习惯把环境配置、参数调试、问题排查都写成文档。<br><br>'+
+    '<b>报考云南烟草</b>，是因为它是云南最重要的产业，也是我能把自动化和信息化两样本事都用上的地方；我长期在云南生活，愿意留在云南发展。谢谢各位考官。'+
+    '</div></div></details>';
+
+  h+='<div class="sec">高频题库 · 准备 30 秒口径</div>';
+  IV.forEach(function(x,i){
+    h+='<details class="card"><summary>'+(i+1)+'. '+x[0]+'<span class="tag">必问</span></summary><div class="body"><div class="k">'+x[1]+'</div></div></details>';
+  });
+
+  h+='<div class="sec">五个 STAR 故事（一定要背熟）</div>';
+  STAR.forEach(function(x,i){
+    h+='<details class="card"><summary>'+(i+1)+'. '+x[0]+'</summary><div class="body"><div class="k">'+x[1]+'</div></div></details>';
+  });
+
+  h+='<div class="sec">面试形式</div><div class="card"><div class="body">'+
+    '<p>云南烟草以<b>结构化 / 半结构化</b>为主，技术岗可能加专业问答或实操。</p>'+
+    '<p class="hl">笔试考完就要开始准备，<b>别等面试通知</b> —— 通知到面试通常只有几天。</p></div></div>';
+  $("#p-iv").innerHTML=h;
+}
+
+/* ============ 避坑 ============ */
+function renderTips(){
+  var m=get("ihub_mat",{});
+  var n=0; MATS.forEach(function(x,i){if(m["a"+i])n++});
+  var h='<div class="sec" style="color:var(--bad)">⚠️ 最致命的一条</div>'+
+    '<div class="card"><div class="body"><div class="k red">同一批次<b>只能报 1 个单位 1 个岗位</b>，重复投递<b>取消资格</b>；信息造假记入诚信档案、<b>终身禁考</b>；初审未通过<b>不能再次投递同省岗位</b>。</div>'+
+    '<p>投之前先在 InternHub 的「📮 网申跟踪」里记一笔，投完立刻改成「已投」。工具里有重复投递检查，看到红字报警别忽略。</p></div></div>';
+
+  h+='<div class="sec">选岗：看到这些词要不要报</div><div class="card"><div class="body"><table>'+
+    '<tr><th class="grn">看到 → 报</th><th class="red">看到 → 不报</th></tr>'+
+    '<tr><td>数字信息类、信息化、信息技术、信息中心</td><td>生产操作类、操作岗、车间、一线</td></tr>'+
+    '<tr><td>计算机、软件、网络、网络安全、大数据、人工智能</td><td>烟叶收购、分拣、包装、司炉、辅助工</td></tr>'+
+    '<tr><td>自动化、电气、机电、仪表、设备、智能制造</td><td>稽查、访销、客户经理、营销、送货</td></tr>'+
+    '<tr><td>运维、研发、技术岗、专业技术、管理类</td><td>安保、消防、烟站、仓库、养护、厨师、司机</td></tr>'+
+    '</table><p><b>你的排序：</b>① 数字信息类/信息化岗（8.8 分）② 机电自动化类（8.2）③ 质量检验/技术中心（8.0）。<br><b>永远别碰：</b>生产操作（三班倒）、烟叶生产（驻村）、稽查与客户经理（外勤）。</p></div></div>';
+
+  h+='<div class="sec">报名材料（提前一周备齐，PDF）</div><div class="card">';
+  MATS.forEach(function(x,i){
+    h+='<div class="task'+(m["a"+i]?" ck":"")+'" data-mat="'+i+'"><div class="box">✓</div><div class="t1">'+x+'</div></div>';
+  });
+  h+='</div>';
+
+  h+='<div class="sec">流程八步</div><div class="card"><div class="body"><p>'+
+    '公告检索选岗 → 网申注册填报（<b>实名、亲属关系要申报</b>）→ 上传材料 → 线上初审（3–7 工作日）→ 笔试通知/打印准考证 → 资格复审（带纸质材料）→ 面试 → 体检政审 → 公示 5 工作日 → 签约</p></div></div>';
+
+  h+='<div class="sec">硬性条件自查（你已满足）</div><div class="card"><div class="body"><table>'+
+   '<tr><th>条件</th><th>你</th></tr>'+
+   '<tr><td>2027 届全日制统招、无社保记录</td><td class="grn">✅</td></tr>'+
+   '<tr><td>本科及以上</td><td class="grn">✅</td></tr>'+
+   '<tr><td>年龄（本科 ≤25 周岁）</td><td class="grn">✅ 自查出生年月</td></tr>'+
+   '<tr><td>英语 CET-4 ≥425</td><td class="grn">✅ CET-4、CET-6（446）</td></tr>'+
+   '<tr><td>专业电子信息类/计算机类/自动化类</td><td class="grn">✅ 物联网工程</td></tr>'+
+   '<tr><td>车间岗无色盲色弱</td><td>自查</td></tr>'+
+   '</table><p class="hl">目录里没有「物联网工程」时，可按电子信息类或计算机类报 —— <b>报名前打公告上的咨询电话确认</b>，别自己猜。</p></div></div>';
+
+  h+='<div class="sec">官方信息源（每周固定看）</div><div class="card"><div class="body"><p>'+
+   '🏛 <a href="http://www.tobacco.gov.cn/gjyc/zpxx/list.shtml">国家烟草专卖局 · 人才招聘专栏</a>（<b>全国各省唯一首发口</b>）<br>'+
+   '🏛 <a href="https://yn.tobacco.gov.cn/">云南省烟草专卖局</a><br>'+
+   '🏭 <a href="https://www.ynzy-tobacco.com/">云南中烟工业有限责任公司</a><br>'+
+   '🏛 <a href="https://hrss.yn.gov.cn/">云南省人社厅</a></p></div></div>';
+
+  $("#p-tips").innerHTML=h;
+  Array.prototype.forEach.call($("#p-tips").querySelectorAll("[data-mat]"),function(x){
+    x.onclick=function(){
+      var i=x.dataset.mat,m=get("ihub_mat",{});
+      m["a"+i]=!m["a"+i]; set("ihub_mat",m); x.classList.toggle("ck",!!m["a"+i]);
+    };
+  });
+}
+
+/* ============ 渲染 & 交互 ============ */
+renderToday();renderMem();renderQuiz();renderMajor();renderIv();renderTips();
+
+document.querySelectorAll("nav button").forEach(function(b){
+  b.onclick=function(){
+    document.querySelectorAll("nav button").forEach(function(x){x.classList.remove("on")});
+    b.classList.add("on");
+    document.querySelectorAll(".page").forEach(function(p){p.classList.remove("on")});
+    $("#p-"+b.dataset.p).classList.add("on");
+    window.scrollTo(0,0);
+  };
+});
+
+/* 搜索 */
+var allCards=[];
+function reindex(){allCards=Array.prototype.slice.call(document.querySelectorAll(".card,.task"))}
+reindex();
+$("#search").oninput=function(){
+  var q=this.value.trim().toLowerCase();
+  if(!q){ allCards.forEach(function(c){c.classList.remove("hide")}); return; }
+  allCards.forEach(function(c){
+    var t=(c.textContent||"").toLowerCase();
+    c.classList.toggle("hide", t.indexOf(q)<0);
+    if(t.indexOf(q)>=0 && c.tagName==="DETAILS") c.open=true;
+  });
+};
+
+/* 主题 */
+var TH=get("ihub_theme","dark");
+function applyTH(){
+  document.documentElement.setAttribute("data-theme",TH);
+  $("#theme").textContent = TH==="dark"?"☀️":"🌙";
+  var mt=document.querySelector('meta[name=theme-color]');
+  if(mt) mt.setAttribute("content",TH==="dark"?"#12161c":"#f2f4f7");
+}
+applyTH();
+$("#theme").onclick=function(){TH=TH==="dark"?"light":"dark";set("ihub_theme",TH);applyTH()};
+
+$("#sub").textContent="距笔试 "+Math.max(0,Math.ceil((EXAM-new Date())/86400000))+" 天 · 每天 2 小时就够";
+</script>
+</body>
+</html>

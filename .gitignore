@@ -18,3 +18,7 @@ backup/
 
 # ===== 不要把 GitHub token 提交上去 =====
 token.txt
+
+# ===== 本机会话/笔记 & 发布产物（不进公开仓库） =====
+.workbuddy/
+备考冲刺资料/mobile/

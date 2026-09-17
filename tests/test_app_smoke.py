@@ -164,18 +164,86 @@ def main() -> int:
     _b5k = [b.key for b in _a5.button]
     check("解析后出现『确认导入』按钮", "wz_commit" in _b5k, _b5k[:14])
 
-    print("[4] 侧边栏能渲染筛选控件")
-    check("快速锁定城市 radio 存在",
-          any("潍坊" in str(r.options) for r in at.radio), [str(r.options)[:40] for r in at.radio])
+    print("[4] v3：岗位页的城市多选 / 排序 / 视图（筛选项已从侧边栏上移到岗位页）")
+    _ms = {m.key: list(m.options) for m in at.multiselect}
+    check("有城市多选（默认昆明+大理）", "flt_cities" in _ms, list(_ms)[:8])
+    if "flt_cities" in _ms:
+        _def = [m for m in at.multiselect if m.key == "flt_cities"][0].value
+        check("城市默认就是 昆明 + 大理", sorted(_def) == ["大理", "昆明"], _def)
+        check("『云南/全国/远程』等地区也能选",
+              "云南" in _ms["flt_cities"], _ms["flt_cities"][:8])
+    check("侧边栏已不再放城市 radio（筛选上移到岗位页了）",
+          not any("潍坊" in str(r.options) for r in at.radio),
+          [str(r.options)[:40] for r in at.radio])
 
-    print("[4] 切换到不同城市筛选后仍能渲染（不写库）")
+    _sb = {s.key: list(s.options) for s in at.selectbox}
+    check("有排序下拉", "flt_sort" in _sb, list(_sb)[:8])
+    if "flt_sort" in _sb:
+        for want in ("发布时间（新→旧）", "截止时间（近→远）", "公司名（A→Z）"):
+            check(f"排序选项含『{want}』", want in _sb["flt_sort"], _sb["flt_sort"])
+    _cb = {str(c.key) for c in at.checkbox}
+    check("有『报名中』开关", "flt_open" in _cb, sorted(_cb))
+    check("有『只看未截止』开关", "flt_unexp" in _cb, sorted(_cb))
+    _rd = {r.key: list(r.options) for r in at.radio}
+    check("有『表格 / 卡片』视图切换", _rd.get("flt_view") == ["表格", "卡片"], _rd.get("flt_view"))
+    check("有收录时间范围", _rd.get("flt_time") == ["全部", "近3天", "近7天", "近30天"],
+          _rd.get("flt_time"))
+
+    print("[4b] 切换排序 / 视图 / 报名中 后仍能渲染（不写库）")
+    _a4 = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+    _a4.run()
+    _s4 = [s for s in _a4.selectbox if s.key == "flt_sort"]
+    if _s4:
+        _s4[0].set_value("截止时间（近→远）").run()
+        check("按截止日期排序后无异常", not _a4.exception, [e.value for e in _a4.exception])
+    _a4b = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+    _a4b.run()
+    _v4 = [r for r in _a4b.radio if r.key == "flt_view"]
+    if _v4:
+        _v4[0].set_value("卡片").run()
+        check("卡片视图无异常", not _a4b.exception, [e.value for e in _a4b.exception])
+    _a4c = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+    _a4c.run()
+    _o4 = [c for c in _a4c.checkbox if c.key == "flt_open"]
+    if _o4:
+        _o4[0].check().run()
+        check("勾『报名中』后无异常", not _a4c.exception, [e.value for e in _a4c.exception])
+
+    print("[4c] 城市多选：切到单个城市仍能渲染（不写库）")
     for city in ("昆明", "大理"):
         at2 = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
         at2.run()
-        radios = [r for r in at2.radio if "潍坊" in str(r.options)]
-        if radios:
-            radios[0].set_value(city).run()
-        check(f"选 {city} 后无异常", not at2.exception, [e.value for e in at2.exception])
+        ms = [m for m in at2.multiselect if m.key == "flt_cities"]
+        if ms:
+            ms[0].set_value([city]).run()
+        check(f"只选 {city} 后无异常", not at2.exception, [e.value for e in at2.exception])
+
+    print("[4d] v3：新手引导 + 每页签顶部的「这一页帮你做什么」")
+    _ob_src = _src
+    check("有新手引导条（首次打开才弹）", "render_onboarding" in _ob_src)
+    check("引导是 4 步", "第 <span id=\"s1\">1</span> / 4 步" in _ob_src)
+    check("引导关掉后写 localStorage（下次不再弹）",
+          "localStorage.setItem(KEY,'1')" in _ob_src.replace(" ", "")
+          or "localStorage.setItem(KEY, '1')" in _ob_src)
+    check("引导的 localStorage key 带版本号", "ihub_onboard_v1" in _ob_src)
+    _infos = [str(i.value) for i in at.get("info")]
+    _joined = "\n".join(_infos)
+    for _want in ("岗位", "投递", "简历", "备考"):
+        check(f"『这一页帮你做什么』覆盖了『{_want}』页",
+              any(("这一页帮你做什么" in x) and (_want in x) for x in _infos),
+              [x[:50] for x in _infos][:4])
+    check("岗位页那句点明了「剩 ≤3 天标红」", "≤3 天标红" in _joined, None)
+    check("投递页那句点明了烟草 1 单位 1 岗", "1 个单位 1 个岗" in _joined, None)
+
+    print("[4e] v3：侧边栏 4 项 + 维护区")
+    _side_src = _src
+    for _h in ("① 抓取设置", "② 快速入口", "③ 维护", "ℹ️ 使用说明与合规"):
+        check(f"侧边栏有『{_h}』", _h in _side_src, None)
+    _all_btn = [str(b.label) for b in at.button]
+    check("维护区能一键重新生成脚本", any("重新生成脚本" in x for x in _all_btn), _all_btn[:8])
+    check("维护区能补齐发布时间", any("补齐发布时间" in x for x in _all_btn), _all_btn[:8])
+    check("主按钮都用了 type=primary（一眼看见该点哪个）",
+          _src.count('type="primary"') >= 5, _src.count('type="primary"'))
 
     print("[5] 切换岗位类型=秋招")
     at3 = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)

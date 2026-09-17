@@ -5,6 +5,7 @@ import csv
 import datetime
 import os
 import re
+import sys
 
 import pandas as pd
 import streamlit as st
@@ -38,13 +39,75 @@ def _display_df(rows):
     return df
 
 
+def days_left(deadline):
+    """距截止还剩几天：没日期 → None；已过 → 负数。"""
+    s = str(deadline or "").strip()[:10]
+    if len(s) != 10:
+        return None
+    try:
+        d = datetime.date.fromisoformat(s)
+    except ValueError:
+        return None
+    return (d - datetime.date.today()).days
+
+
+def left_badge(n):
+    """剩余天数的显示文案 + 颜色（临期 3 天标红 —— 这是最容易漏投的一类）。"""
+    if n is None:
+        return "—", "#8b98a9"
+    if n < 0:
+        return "已截止", "#8b98a9"
+    if n == 0:
+        return "今天截止", "#d1242f"
+    if n <= 3:
+        return f"剩 {n} 天", "#d1242f"
+    if n <= 7:
+        return f"剩 {n} 天", "#c77700"
+    return f"剩 {n} 天", "#1a7f37"
+
+
 def load_df(city, keyword, active_only, fake_only, favorite_only,
-            unexpired_only, since_days, job_type=None):
+            unexpired_only, since_days, job_type=None, sort=None, open_only=False):
     rows = db.query(city=city, keyword=keyword, active_only=active_only,
                     fake_only=fake_only, favorite_only=favorite_only,
                     unexpired_only=unexpired_only, since_days=since_days,
-                    job_type=job_type)
+                    job_type=job_type, sort=sort, open_only=open_only)
     return _display_df(rows)
+
+
+def _card_html(r):
+    """一条岗位的卡片（卡片视图用）。发布时间 / 截止日期 / 剩余天数 一眼可见。"""
+    import html
+    def e(x):
+        return html.escape(str(x or ""))
+    title, company = e(r.get("title")), e(r.get("company"))
+    city = e(r.get("city"))
+    pub = str(r.get("published_at") or "")[:10] or "—"
+    pub_note = "（抓取日）" if str(r.get("published_src") or "") == "fetched" else ""
+    dl = str(r.get("deadline") or "")[:10]
+    n = days_left(dl)
+    txt, color = left_badge(n)
+    if dl and n is not None and n <= 3:
+        badge = (f'<span style="background:{color};color:#fff;padding:2px 8px;'
+                 f'border-radius:10px;font-size:12px;font-weight:700">⚠ {txt}</span>')
+    else:
+        badge = f'<span style="color:{color};font-size:12px;font-weight:600">{txt}</span>'
+    link = e(r.get("official_url") or r.get("link") or "")
+    off = "官方" if r.get("official_url") else "来源页"
+    salary = e(r.get("salary"))
+    return (
+        '<div style="border:1px solid #2b3441;border-radius:12px;padding:11px 13px;'
+        'margin-bottom:9px;background:#1b212b">'
+        f'<div style="font-size:15px;font-weight:700;color:#e8edf4">{title}</div>'
+        f'<div style="font-size:13px;color:#a3b0c2;margin-top:3px">'
+        f'{company}　·　{city}　·　{salary}</div>'
+        '<div style="font-size:12px;color:#6d7c90;margin-top:6px">'
+        f'发布 {pub}<span style="font-size:11px">{pub_note}</span>'
+        f'　｜　截止 {dl or "未公布"}　｜　{badge}'
+        f'</div>'
+        f'<div style="margin-top:7px"><a href="{link}" target="_blank" '
+        f'style="color:#4a9eff;font-size:12.5px">前往投递（{off}）↗</a></div>'
+        '</div>')
 
 
 def export_box_csv():
@@ -101,6 +164,93 @@ def _dup_hits(company, title, idx=None):
     return hits
 
 
+# 首次打开的新手引导条：4 步卡片，关掉后写 localStorage，之后不再出现。
+# 用原生 HTML 组件渲染（Streamlit 自己没有 localStorage，得靠这段 JS 记住"看过了"）。
+_ONBOARD_HTML = """
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  #ob{border:1px solid #2b6cb0;border-left:4px solid #2b6cb0;background:#16243a;
+      border-radius:10px;padding:12px 14px;color:#e8edf4}
+  #ob .step{font-size:11px;color:#7fb3ff;letter-spacing:1px;margin-bottom:5px}
+  #ob h4{margin:0 0 5px;font-size:15px;color:#fff}
+  #ob p{margin:0;font-size:13px;line-height:1.6;color:#c3d3e8}
+  #ob b{color:#ffd479}
+  #ob .row{margin-top:10px;display:flex;gap:8px;align-items:center}
+  #ob button{border:1px solid #3d5a80;background:#1e3a5f;color:#e8edf4;border-radius:7px;
+      padding:5px 13px;font-size:13px;cursor:pointer}
+  #ob button.pri{background:#2b6cb0;border-color:#2b6cb0;color:#fff;font-weight:600}
+  #ob button.link{background:none;border:none;color:#7d8fa6;font-size:12px;
+      margin-left:auto;text-decoration:underline;cursor:pointer}
+  #ob .dots{display:flex;gap:5px;margin-left:4px}
+  #ob .dots i{width:6px;height:6px;border-radius:50%;background:#3d5a80;display:block}
+  #ob .dots i.on{background:#7fb3ff;width:16px;border-radius:3px}
+</style>
+<div id="ob">
+  <div class="step">第 <span id="s1">1</span> / 4 步 · 30 秒看懂怎么用</div>
+  <h4 id="t"></h4>
+  <p id="b"></p>
+  <div class="row">
+    <button id="prev">上一步</button>
+    <button id="next" class="pri">下一步</button>
+    <span class="dots" id="dots"></span>
+    <button id="skip" class="link">看过了，别再显示</button>
+  </div>
+</div>
+<script>
+(function(){
+  var KEY='ihub_onboard_v1', i=0;
+  var S=[
+    ['🎯 第一步：看岗位',
+     '默认已经帮你选好 <b>昆明 + 大理</b>。用上面的「🔎 筛选与排序」挑出要投的，'
+     + '排序选「截止时间（近→远）」能先看到<b>快截止</b>的；剩 ≤3 天的会<b>标红</b>。'],
+    ['🏛 第二步：去官方页投',
+     '点列表里的「<b>企业官网招聘</b>」列，直接到公司自己的招聘页 —— '
+     + '<b>不要在第三方平台页投</b>（信息滞后、还容易被中间商截留）。'],
+    ['🤖 第三步：网申让脚本填',
+     '装好 Tampermonkey 后打开 <code>网申助手.user.js</code>，进网申页点右下角悬浮球 → '
+     + '「🚀 填入空字段」。<b>70 类字段</b>自动填，认不出的教它一次就终身认识。'],
+    ['📄 第四步：简历 + 备考',
+     '「📄 简历定制」按岗位方向出<b>单页定向简历</b>；「📚 备考方案」倒推每天该干什么。'
+     + '手机上翻：<b>备考冲刺资料/手机备考手册.html</b>。']
+  ];
+  function hide(){
+    try{localStorage.setItem(KEY,'1')}catch(e){}
+    document.getElementById('ob').style.display='none';
+    try{window.parent.postMessage({isStreamlitMessage:true,type:'streamlit:setFrameHeight',height:0},'*')}catch(e){}
+  }
+  function draw(){
+    document.getElementById('s1').textContent=(i+1);
+    document.getElementById('t').textContent=S[i][0];
+    document.getElementById('b').innerHTML=S[i][1];
+    document.getElementById('prev').style.visibility=i? 'visible':'hidden';
+    document.getElementById('next').textContent=(i===S.length-1)?'开始使用 🚀':'下一步';
+    var d='';for(var k=0;k<S.length;k++){d+='<i class="'+(k===i?'on':'')+'"></i>'}
+    document.getElementById('dots').innerHTML=d;
+  }
+  try{ if(localStorage.getItem(KEY)==='1'){ hide(); return; } }catch(e){}
+  draw();
+  document.getElementById('prev').onclick=function(){ if(i>0){i--;draw();} };
+  document.getElementById('next').onclick=function(){
+    if(i<S.length-1){ i++; draw(); } else { hide(); }
+  };
+  document.getElementById('skip').onclick=hide;
+})();
+</script>
+"""
+
+
+def render_onboarding():
+    """首次打开才弹的 4 步引导条（关掉后写 localStorage，之后不再出现）。"""
+    if st.session_state.get("_onboard_shown"):
+        return
+    st.session_state["_onboard_shown"] = True
+    try:
+        st.html(_ONBOARD_HTML, height=175)     # 1.63：st.html 替代已弃用的 components.v1.html
+    except Exception:
+        pass
+
+
 def _download_file(path, label, mime, container=None):
     """存在才显示下载按钮；不存在就提示怎么生成。container 可传 st.columns 里的某一列。"""
     box = container if container is not None else st
@@ -121,8 +271,15 @@ def main():
     st.caption("链接口径：**只有企业/单位自己的域名才叫「官方直达」**；"
                "招聘平台的页一律标「来源页/平台入口」；点开是搜索引擎的假直达已全部移除。")
 
+    render_onboarding()
+
     db.init_db()
     db.backfill_official_urls()
+    # v3 硬标准：发布时间不许为空（空的补抓取日，否则按发布时间排序时老岗位会顶到最前）
+    try:
+        db.fill_published_at()
+    except Exception:
+        pass
 
     with st.sidebar:
         st.header("① 抓取设置")
@@ -155,23 +312,44 @@ def main():
             st.rerun()
 
         st.divider()
-        st.header("② 筛选")
-        city_choices = list(dict.fromkeys(["全部"] + config.PROVINCE_LABELS + sorted(db.distinct_cities())))
-        quick = st.radio("快速锁定城市（秋招用）", ["不限", "潍坊", "昆明", "大理"], horizontal=True)
-        _yn_default = city_choices.index("云南") if "云南" in city_choices else 0
-        f_city = st.selectbox("按地区筛选（默认「云南」＝昆明/大理一带）", city_choices,
-                              index=_yn_default)
-        if quick != "不限":
-            f_city = quick
-        # 「岗位类型」不在这里 —— 它已上移为「🎯 岗位」页顶部的一级开关（默认秋招）
-        f_keyword = st.text_input("关键词（岗位/公司/标签）", placeholder="例如：国企 / 电气 / 嵌入式 / 新媒体")
-        c1, c2 = st.columns(2)
-        active_only = c1.checkbox("仅看有效", value=True)
-        fake_only = c2.checkbox("只看风险标记")
-        fav_only = st.checkbox("只看收藏")
-        unexpired = st.checkbox("只看未截止（有截止日期的过滤）", value=True)
-        time_range = st.radio("收录时间范围", ["全部", "近3天", "近7天", "近30天"], horizontal=True)
-        since_days = {"近3天": 3, "近7天": 7, "近30天": 30}.get(time_range)
+        st.caption("筛选与排序已上移到「🎯 岗位」页顶部（看岗位的地方就该能筛），"
+                   "这里只留抓取设置。")
+
+        st.divider()
+        st.header("② 快速入口")
+        st.markdown(
+            "- 📱 [手机备考手册（在线版）](https://tobacco-study-card.app.workbuddy.host/)\n"
+            "- 🤖 `网申助手.user.js` → 用 Tampermonkey 安装\n"
+            "- 📖 `网申助手使用说明.md`（3 步上手）\n"
+            "- 📁 `投递文件/` ← 生成的简历都在这里")
+        if st.button("📂 打开「投递文件」文件夹"):
+            try:
+                os.startfile(OUT_DIR)              # noqa: S606 本机自用工具
+            except Exception as _e:
+                st.caption(f"打不开：{_e}")
+
+        with st.expander("③ 维护（重生成 / 体检 / 清数据）", expanded=False):
+            st.caption("改了资料或者页面出毛病，先点这两个。")
+            if st.button("🔧 重新生成脚本（网申助手 + 采集助手）"):
+                import subprocess
+                _r = subprocess.run([sys.executable, "-m", "ihub.autofill"],
+                                    cwd=ROOT_APP, capture_output=True, text=True,
+                                    encoding="utf-8", errors="replace")
+                st.success("网申助手已重新生成" if _r.returncode == 0 else f"失败：{_r.stderr[-300:]}")
+            if st.button("🧭 补齐发布时间（空的记抓取日）"):
+                n = db.fill_published_at()
+                st.success(f"补齐 {n} 条（发布时间为空的已按抓取日填好）")
+                st.rerun()
+            st.caption("⚠️ 下面两个会改数据，想清楚再点。")
+            if st.button("🧹 清空收藏", key="mt_clear_fav"):
+                db.set_favorites([])
+                st.success("已清空收藏")
+            if st.checkbox("我确认要清空**投递箱**（把已勾选的待投全部归零）"):
+                if st.button("❌ 执行清空投递箱", key="mt_clear_box"):
+                    db.set_apply_state([(int(r["id"]), 0) for r in
+                                        db.query(apply_state=1, active_only=False, limit=5000)])
+                    st.success("投递箱已清空")
+                    st.rerun()
 
     s = db.stats()
     in_box = db.query(apply_state=1)
@@ -190,6 +368,20 @@ def main():
     # 依次追加渲染到同一个页签 —— 所以下面 with tabN: 的编号必须与这里的 4 个页签一一对应。
     (tab1, tab2, tab3, tab4) = st.tabs(
         ["🎯 岗位", "📮 投递与网申", "📄 简历定制", "📚 备考方案"])
+
+    # ---- 每个页签顶部一句「这一页帮你做什么」（v3：别让人猜这页是干嘛的）----
+    with tab1:
+        st.info("**这一页帮你做什么**：筛出昆明 + 大理要投的岗位 → 看**发布时间 / 截止日期 / 剩几天**"
+                "（剩 ≤3 天标红）→ 点**企业官网**列去官方页投。　主线：**🔎 筛选与排序** → 勾选投递箱 → **🚀 广投**")
+    with tab2:
+        st.info("**这一页帮你做什么**：记每一笔投递，别「投了不知道投过」。"
+                "⚠️ **烟草同批次只能报 1 个单位 1 个岗**，重复投递会在这里被拦下来。")
+    with tab3:
+        st.info("**这一页帮你做什么**：选岗位方向 → 生成**单页定向简历**（docx / pdf）+ "
+                "可以直接粘进网申系统的文案。先点上面的主按钮。")
+    with tab4:
+        st.info("**这一页帮你做什么**：按考试日倒推每天该干什么、背什么、刷什么。"
+                "📱 手机上翻：**备考冲刺资料/手机备考手册.html**（已发布成在线链接）。")
 
     # ============ 岗位列表 ============
     with tab1:
@@ -213,49 +405,105 @@ def main():
                             key="lvl_job_type",
                             help="默认只看秋招。实习数据一条没删，切到「实习」就能看。")
 
+        # ---- 筛选 + 排序（v3：城市多选默认昆明+大理；按发布时间/截止日期/公司名排序）----
+        with st.container(border=True):
+            st.markdown("**🔎 筛选与排序**")
+            city_choices = list(dict.fromkeys(
+                config.DEFAULT_CITIES + config.PROVINCE_LABELS + sorted(db.distinct_cities())))
+            _def_cities = [c for c in ("昆明", "大理") if c in city_choices]
+            f_cities = st.multiselect(
+                "城市（可多选，默认昆明 + 大理；不选 = 不限）", city_choices,
+                default=_def_cities, key="flt_cities",
+                help="大理也投：本地生源竞争远小于昆明，别只盯昆明。")
+            r1, r2 = st.columns([1.3, 1])
+            f_keyword = r1.text_input("关键词（岗位/公司/标签）", key="flt_kw",
+                                      placeholder="例如：国企 / 电气 / 嵌入式 / 信息化")
+            sort_by = r2.selectbox("排序", db.SORT_OPTIONS, index=0, key="flt_sort",
+                                   help="按发布时间看最新；按截止时间看「快截止的」先投。")
+            r3, r4 = st.columns([1, 1])
+            time_range = r3.radio("收录时间范围", ["全部", "近3天", "近7天", "近30天"],
+                                  horizontal=True, key="flt_time")
+            since_days = {"近3天": 3, "近7天": 7, "近30天": 30}.get(time_range)
+            view_mode = r4.radio("视图", ["表格", "卡片"], horizontal=True, key="flt_view",
+                                 help="卡片视图一眼看到发布时间 / 截止日期 / 剩几天")
+            g1, g2, g3, g4, g5 = st.columns(5)
+            open_only = g1.checkbox("🟢 报名中", value=False, key="flt_open",
+                                    help="只看**有明确截止日期且还没过**的（没写截止日期的不算）")
+            unexpired = g2.checkbox("只看未截止", value=True, key="flt_unexp",
+                                    help="排除已过期的（没写截止日期的保留）")
+            active_only = g3.checkbox("仅看有效", value=True, key="flt_active")
+            fav_only = g4.checkbox("只看收藏", value=False, key="flt_fav")
+            fake_only = g5.checkbox("只看风险", value=False, key="flt_fake")
+            if open_only:
+                st.caption("🟢 报名中 = 有截止日期且 ≥ 今天。**没写截止日期的岗位会被这条筛掉**"
+                           "（那些用「只看未截止」来看）。")
+
         # ---- 📥 导入向导（v2 重构：4 条通道收敛成这 1 处 —— 原来岗位页/备考页各有一套，埋得深没人找得到）
         from ihub import wizard_ui
         with st.container(border=True):
             wizard_ui.render()
 
-        city_arg = None if f_city == "全部" else f_city
-        df = load_df(city_arg, f_keyword or None, active_only, fake_only, fav_only,
-                     unexpired, since_days, job_type=job_type)
+        f_city = "、".join(f_cities) if f_cities else "全部"
+        df = load_df(f_cities, f_keyword or None, active_only, fake_only, fav_only,
+                     unexpired, since_days, job_type=job_type, sort=sort_by,
+                     open_only=open_only)
         if df.empty:
-            st.info("📭 暂无数据：先在左侧选城市并点「立即抓取」。")
+            st.info("📭 暂无数据：先在左侧选城市并点「立即抓取」，或用上面的「📥 导入向导」导入。")
         else:
             today = datetime.date.today().isoformat()
             dl = df["截止时间"].astype(str).str[:10]
+            df["发布时间"] = df.get("published_at", pd.Series(dtype=str)).fillna("").astype(str).str[:10]
+            df["剩余"] = df["截止时间"].apply(lambda x: (lambda n: left_badge(n)[0])(days_left(x)))
             df["状态"] = dl.apply(lambda x: "已截止" if (len(x) == 10 and x < today) else ("临近" if (len(x) == 10 and x <= today) else "可投"))
-            st.caption(f"共 {len(df)} 条 · 勾选「投递箱」→ 保存后到「投递工作台」生成材料")
+
+            if view_mode == "卡片":
+                # 卡片视图：一眼看到发布时间 / 截止日期 / 剩几天（临期 3 天标红），
+                # 但一次最多渲染 80 张，再多就卡了 —— 后面提示去用表格批量勾选。
+                rows_r = df.to_dict("records")
+                st.caption(f"共 {len(df)} 条 · 卡片视图最多显示 80 条"
+                           "（要批量勾选投递箱请用「表格」视图）")
+                st.markdown("".join(_card_html(r) for r in rows_r[:80]),
+                            unsafe_allow_html=True)
+                st.divider()
+            else:
+                st.caption(f"共 {len(df)} 条 · 勾选「投递箱」→ 保存后到「投递工作台」生成材料")
             cols = ["id", "title", "company", "city", "salary", "degree", "标签",
-                    "截止时间", "状态", "投递箱", "source", "link", "企业官网", "favorite"]
-            edit = st.data_editor(
-                df[cols],
-                hide_index=True,
-                disabled=[c for c in cols if c not in ("投递箱", "favorite")],
-                column_config={
-                    "id": None,
-                    "title": st.column_config.TextColumn("岗位"),
-                    "company": "公司", "city": "城市", "salary": "薪资", "degree": "学历",
-                    "标签": "标签",
-                    "截止时间": "截止时间",
-                    "状态": "状态",
-                    "投递箱": st.column_config.CheckboxColumn("🎯投递箱", help="勾选后到“投递工作台”批量准备材料"),
-                    "source": "来源",
-                    "link": st.column_config.LinkColumn("投递（原平台）", help="岗位来源平台的原始详情页/申请链接"),
-                    "企业官网": st.column_config.LinkColumn("企业官网招聘", help="公司官方招聘入口（核验/直达用，缺省为空）"),
-                    "favorite": st.column_config.CheckboxColumn("⭐收藏"),
-                },
-                num_rows="fixed", width="stretch", height=560,
-            )
-            if st.button("💾 保存 投递箱+收藏", type="primary"):
-                fav_ids = edit.loc[edit["favorite"] == True, "id"].tolist()  # noqa: E712
-                db.set_favorites(fav_ids)
-                pairs = [(int(x), int(bool(y))) for x, y in zip(edit["id"], edit["投递箱"])]
-                db.set_apply_state(pairs)
-                st.success(f"已更新：收藏 {len(fav_ids)} 条；投递箱 {sum(1 for _, v in pairs if v)} 条")
-                st.rerun()
+                    "发布时间", "截止时间", "剩余", "状态", "投递箱", "source", "link",
+                    "企业官网", "favorite"]
+            # 卡片视图下把表格收起来（卡片用来扫，表格用来勾投递箱）
+            _holder = (st.expander("📋 展开表格（勾选投递箱 / 收藏）", expanded=False)
+                       if view_mode == "卡片" else st.container())
+            with _holder:
+                edit = st.data_editor(
+                    df[cols],
+                    hide_index=True,
+                    disabled=[c for c in cols if c not in ("投递箱", "favorite")],
+                    column_config={
+                        "id": None,
+                        "title": st.column_config.TextColumn("岗位"),
+                        "company": "公司", "city": "城市", "salary": "薪资", "degree": "学历",
+                        "标签": "标签",
+                        "发布时间": st.column_config.TextColumn(
+                            "发布时间", help="来源没给发布日期的，这里记的是抓取日（卡片里会标「抓取日」）"),
+                        "截止时间": "截止时间",
+                        "剩余": st.column_config.TextColumn(
+                            "剩余", help="距截止还剩几天；≤3 天是临期，最容易漏投"),
+                        "状态": "状态",
+                        "投递箱": st.column_config.CheckboxColumn("🎯投递箱", help="勾选后到“投递工作台”批量准备材料"),
+                        "source": "来源",
+                        "link": st.column_config.LinkColumn("投递（原平台）", help="岗位来源平台的原始详情页/申请链接"),
+                        "企业官网": st.column_config.LinkColumn("企业官网招聘", help="公司官方招聘入口（核验/直达用，缺省为空）"),
+                        "favorite": st.column_config.CheckboxColumn("⭐收藏"),
+                    },
+                    num_rows="fixed", width="stretch", height=560,
+                )
+                if st.button("💾 保存 投递箱+收藏", type="primary"):
+                    fav_ids = edit.loc[edit["favorite"] == True, "id"].tolist()  # noqa: E712
+                    db.set_favorites(fav_ids)
+                    pairs = [(int(x), int(bool(y))) for x, y in zip(edit["id"], edit["投递箱"])]
+                    db.set_apply_state(pairs)
+                    st.success(f"已更新：收藏 {len(fav_ids)} 条；投递箱 {sum(1 for _, v in pairs if v)} 条")
+                    st.rerun()
 
             st.divider()
             st.markdown("**🚀 广投：把「当前筛选结果」整批处理（昆明/大理 秋招适用）**")
@@ -269,10 +517,10 @@ def main():
                 db.set_apply_state([(int(i), 0) for i in df["id"]])
                 st.success(f"已把 {len(df)} 条移出投递箱")
                 st.rerun()
-            export = df[["title", "company", "city", "salary", "degree", "截止时间", "状态",
-                          "企业官网", "link"]].copy()
-            export.columns = ["岗位", "公司", "城市", "薪资", "学历", "截止日期", "状态",
-                              "官方投递入口", "原平台链接"]
+            export = df[["title", "company", "city", "salary", "degree", "发布时间",
+                          "截止时间", "剩余", "状态", "企业官网", "link"]].copy()
+            export.columns = ["岗位", "公司", "城市", "薪资", "学历", "发布时间", "截止日期",
+                              "剩余天数", "状态", "官方投递入口", "原平台链接"]
             b3.download_button(
                 "⬇️ 导出清单 CSV",
                 export.to_csv(index=False).encode("utf-8-sig"),
@@ -310,10 +558,10 @@ def main():
             if st.button("💾 保存偏好"):
                 st.success(f"已保存：{prefs_mod.save(p)}")
 
-        city_arg_r = None if f_city == "全部" else f_city
-        rows_r = db.query(city=city_arg_r, keyword=f_keyword or None, active_only=active_only,
+        rows_r = db.query(cities=f_cities or None, keyword=f_keyword or None,
+                          active_only=active_only, open_only=open_only,
                           unexpired_only=unexpired, since_days=since_days,
-                          job_type=job_type, limit=3000)
+                          job_type=job_type, sort=sort_by, limit=3000)
         if not rows_r:
             st.info("暂无数据：先在左侧选城市并点「🚀 立即抓取」。")
         else:
@@ -346,7 +594,7 @@ def main():
         st.divider()
         st.markdown("#### 📄 拿一条岗位去做定向简历")
         from ihub import linkcheck as LC           # 局部导入：这块比「链接体检」区块先执行
-        _lk_rows = db.query(city=None if f_city == "全部" else None,
+        _lk_rows = db.query(cities=f_cities or None,
                            keyword=f_keyword or None, active_only=active_only, limit=300)
         if not _lk_rows:
             st.caption("岗位列表为空 —— 先在侧边栏抓取或导入岗位。")
@@ -629,7 +877,7 @@ def main():
                 a1, a2, a3 = st.columns(3)
                 comp = a1.text_input("公司")
                 tit = a2.text_input("岗位")
-                cty = a3.text_input("城市", value=f_city if f_city != "全部" else "潍坊")
+                cty = a3.text_input("城市", value=(f_cities[0] if f_cities else "潍坊"))
                 a4, a5, a6 = st.columns(3)
                 url = a4.text_input("网申/公告链接")
                 dl2 = a5.text_input("截止日期（YYYY-MM-DD）")
@@ -668,7 +916,7 @@ def main():
                                   placeholder="公司\t岗位\t城市\t状态\t投递日期\t链接\t备注\n"
                                               "云南中烟工业有限责任公司\t设备运维\t昆明\t已投\t2026-09-16\t\thttps://…")
             _lc1, _lc2 = st.columns([1, 3])
-            if _lc1.button("📥 解析并预览", key="ledger_parse") and _paste.strip():
+            if _lc1.button("📥 解析并预览", key="ledger_parse", type="primary") and _paste.strip():
                 _parsed = ledger.parse_ledger_text(_paste)
                 if not _parsed:
                     st.warning("没解析出记录 —— 检查一下是不是有「公司」这一列。")

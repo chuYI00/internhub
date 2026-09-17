@@ -103,7 +103,8 @@ def init_db():
                       ("apply_state", "INTEGER DEFAULT 0"), ("apply_note", "TEXT DEFAULT ''"),
                       ("official_url", "TEXT DEFAULT ''"), ("job_type", "TEXT DEFAULT '实习'"),
                       ("batch", "TEXT DEFAULT ''"),
-                      ("description", "TEXT DEFAULT ''")):
+                      ("description", "TEXT DEFAULT ''"),
+                      ("published_src", "TEXT DEFAULT ''")):
         if col not in cols:
             conn.execute(f"ALTER TABLE jobs ADD COLUMN {col} {decl}")
     # 迁移完成后才建涉及新列的索引
@@ -111,6 +112,29 @@ def init_db():
     conn.execute("CREATE INDEX IF NOT EXISTS idx_apply ON jobs(apply_state)")
     conn.commit()
     conn.close()
+
+
+def fill_published_at() -> int:
+    """把 published_at 为空的记录用「抓取日」补齐，并标记 published_src='fetched'。
+
+    v3 硬标准：**发布时间不许为空** —— 空值会让「按发布时间排序」把老岗位顶到最前面，
+    看起来像刚发布的，直接误导投递顺序。补的时候记住来源是抓取日而不是官方发布日，
+    这样以后真拿到发布日期还能覆盖。
+    """
+    conn = connect()
+    rows = conn.execute(
+        "SELECT id, fetched_at FROM jobs WHERE published_at IS NULL OR published_at=''"
+    ).fetchall()
+    today = datetime.date.today().isoformat()
+    n = 0
+    for r in rows:
+        d = (str(r["fetched_at"] or "")[:10]) or today
+        conn.execute("UPDATE jobs SET published_at=?, published_src='fetched' WHERE id=?",
+                     (d, r["id"]))
+        n += 1
+    conn.commit()
+    conn.close()
+    return n
 
 
 def upsert_jobs(jobs: list) -> dict:
@@ -133,13 +157,18 @@ def upsert_jobs(jobs: list) -> dict:
             official = str(j.get("official_url") or "") or channels.official_for(str(j.get("company") or ""))
             jtype = str(j.get("job_type") or "实习")
             batch = str(j.get("batch") or "")
+            # 发布时间不许为空：来源没给就用抓取日，并记下来源（以后拿到真的能覆盖）
+            pub = str(j.get("published_at") or "").strip()
+            pub_src = "source" if pub else "fetched"
+            if not pub:
+                pub = now[:10]
             vals = (
                 j.get("source", "实习僧"), job_id, j.get("title"), j.get("company"),
                 j.get("city"), j.get("salary"), j.get("salary_min"), j.get("salary_max"),
                 j.get("degree"), j.get("duration"), j.get("tags"), j.get("industry"),
                 j.get("link"), now, now,
                 1, int(is_fake), reason, 0,
-                j.get("deadline"), j.get("published_at"), official,
+                j.get("deadline"), pub, official,
                 jtype, batch,
                 str(j.get("description") or ""),
                 j.get("dedup_key"),
@@ -150,8 +179,9 @@ def upsert_jobs(jobs: list) -> dict:
                        salary_min, salary_max, degree, duration, tags, industry, link,
                        fetched_at, updated_at, is_active, is_fake, fake_reason, favorite,
                        deadline, published_at, official_url, job_type, batch, description,
-                       dedup_key)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", vals)
+                       dedup_key, published_src)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    vals + (pub_src,))
                 res["inserted"] += 1
             else:
                 # 已有记录：更新内容；风险标记取“任一来源判定为风险”则标风险
@@ -160,7 +190,13 @@ def upsert_jobs(jobs: list) -> dict:
                        salary_max=?, degree=?, duration=?, tags=?, industry=?, link=?,
                        updated_at=?, is_active=1,
                        deadline = COALESCE(?, deadline),
-                       published_at = COALESCE(?, published_at),
+                       -- 新的来源是真发布日就覆盖；否则只在原来也是「抓取日兜底」时才补
+                       published_at = CASE WHEN ?='source' THEN ?
+                                           WHEN COALESCE(published_src,'')<>'source' THEN ?
+                                           ELSE published_at END,
+                       published_src = CASE WHEN ?='source' THEN 'source'
+                                            WHEN COALESCE(published_src,'')<>'source' THEN 'fetched'
+                                            ELSE published_src END,
                        official_url = COALESCE(?, official_url),
                        job_type = CASE WHEN ?!='' THEN ? ELSE job_type END,
                        batch = CASE WHEN ?!='' THEN ? ELSE batch END,
@@ -170,7 +206,7 @@ def upsert_jobs(jobs: list) -> dict:
                     (j.get("title"), j.get("company"), j.get("city"), j.get("salary"),
                      j.get("salary_min"), j.get("salary_max"), j.get("degree"),
                      j.get("duration"), j.get("tags"), j.get("industry"), j.get("link"),
-                     now, j.get("deadline"), j.get("published_at"), official,
+                     now, j.get("deadline"), pub_src, pub, pub, pub_src, official,
                      jtype, jtype, batch, batch,
                      str(j.get("description") or ""), str(j.get("description") or ""),
                      int(is_fake), reason, j.get("source", "实习僧"), job_id))
@@ -184,16 +220,43 @@ def upsert_jobs(jobs: list) -> dict:
     return res
 
 
+# 排序只对这几个固定键开放（拼进 SQL 前先过白名单，绝不把用户输入直接拼进去）
+SORT_OPTIONS = ["发布时间（新→旧）", "截止时间（近→远）", "公司名（A→Z）", "最近收录"]
+_ORDER_SQL = {
+    "发布时间（新→旧）":
+        "COALESCE(NULLIF(published_at,''), substr(fetched_at,1,10)) DESC, id DESC",
+    # 三档：还没截止的按日期升序在最前 → 已过期的沉中间 → 没写日期的沉最后。
+    # 不然一进去满屏都是「已截止」和「不知道什么时候截止」，反而看不见明天就该投的那条。
+    "截止时间（近→远）":
+        "CASE WHEN deadline IS NULL OR deadline='' THEN 2"
+        " WHEN deadline < date('now','localtime') THEN 1 ELSE 0 END, deadline ASC, id DESC",
+    "公司名（A→Z）": "company ASC, id DESC",
+    "最近收录": "id DESC",
+}
+
+
 def query(city=None, keyword=None, active_only=True, fake_only=False,
           favorite_only=False, unexpired_only=False, since_days=None,
-          apply_state=None, job_type=None, limit=2000, order="id DESC"):
+          apply_state=None, job_type=None, limit=2000, order="id DESC",
+          cities=None, open_only=False, sort=None):
     """查询岗位；city/keyword 支持包含匹配。apply_state: 0未投/1待投/2已投/None不限。
-    job_type: 实习/秋招/校招/None不限。"""
+    job_type: 实习/秋招/校招/None不限。
+
+    cities: 多选城市（list），传了就忽略 city。
+    open_only: 「报名中」—— 有明确截止日期且没过期（没日期的不算报名中）。
+    sort: SORT_OPTIONS 之一，优先级高于 order。
+    """
+    if isinstance(city, (list, tuple)):        # 容错：有人把多选列表塞进了 city
+        cities = list(city)
+        city = None
     conn = connect()
     sql = "SELECT * FROM jobs WHERE 1=1"
     params = []
     if active_only:
         sql += " AND is_active=1"
+    if open_only:
+        sql += " AND deadline IS NOT NULL AND deadline != ''" \
+               " AND deadline >= date('now','localtime')"
     if job_type and job_type != "全部":
         sql += " AND job_type=?"
         params.append(job_type)
@@ -209,20 +272,21 @@ def query(city=None, keyword=None, active_only=True, fake_only=False,
     if since_days:
         sql += " AND fetched_at >= date('now', 'localtime', ?)"
         params.append(f"-{int(since_days)} days")
-    if city:
-        cities = config.PROVINCE_CITIES.get(city, [city])
-        if len(cities) == 1:
-            sql += " AND city LIKE ?"
-            params.append(f"%{cities[0]}%")
-        else:
-            placeholders = ",".join("?" * len(cities))
-            sql += f" AND city IN ({placeholders})"
-            params.extend(cities)
+    sel = list(cities) if cities else ([city] if city else [])
+    if sel:
+        expanded = []
+        for c in sel:                      # 「云南」展开成昆明+大理…，单个城市保持原样
+            expanded += config.PROVINCE_CITIES.get(c, [c])
+        expanded = list(dict.fromkeys(expanded))
+        # 城市字段写法很乱（昆明 / 昆明市 / 昆明·五华区），所以一律用 LIKE 而不是 IN
+        sql += " AND (" + " OR ".join(["city LIKE ?"] * len(expanded)) + ")"
+        params += [f"%{c}%" for c in expanded]
     if keyword:
         like = f"%{keyword}%"
         sql += " AND (title LIKE ? OR company LIKE ? OR tags LIKE ? OR industry LIKE ?)"
         params += [like, like, like, like]
-    sql += f" ORDER BY {order} LIMIT ?"
+    order_sql = _ORDER_SQL.get(sort, order) if sort else order
+    sql += f" ORDER BY {order_sql} LIMIT ?"
     params.append(limit)
     rows = conn.execute(sql, params).fetchall()
     conn.close()
