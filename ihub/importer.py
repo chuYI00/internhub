@@ -142,7 +142,9 @@ def _guess_by_content(row) -> dict:
     for i, c in enumerate(row):
         if i in mp.values():
             continue
-        if len(_norm_cell(c)) >= 3:
+        cell = _norm_cell(c)
+        # 「2026/09/16」这种日期别再当岗位名了（飞书岗位表第一列常常就是"更新日期"）
+        if len(cell) >= 3 and not _DATE_CELL_RE.match(cell) and not _URL_RE.match(cell):
             mp["title"] = i
             break
     return mp

@@ -131,6 +131,24 @@ def main() -> int:
     st = wz.load_decoded_csv(os.path.join(tmpdir, "不存在的.csv"))
     check("CSV 不存在时给出明确提示（不抛异常）", st.get("ok") is False and "还没生成" in st.get("msg", ""), st)
 
+    print("[5b] 分页抓包：多个文件合并 + 去重 + 毫秒时间戳还原成日期")
+    p1, p2 = _make_pages()
+    with open(os.path.join(tmpdir, "抓包1.txt"), "w", encoding="utf-8") as f:
+        f.write(p1)
+    with open(os.path.join(tmpdir, "抓包2.txt"), "w", encoding="utf-8") as f:
+        f.write(p2)
+    merged = _run_decoder_multi([os.path.join(tmpdir, "抓包1.txt"),
+                                 os.path.join(tmpdir, "抓包2.txt")])
+    check("两个分页文件合并后是 3 条（重叠那条去重了）",
+          merged is not None and merged["rows"] == 3, merged and merged["rows"])
+    check("服务端 total=3 时不再提示分页", merged is not None and not merged["warn"], merged)
+    check("13 位毫秒时间戳还原成日期（不是一长串数字）",
+          merged is not None and "2026-11-28" in merged["text"], merged and merged["text"][:120])
+    # total 比实际多 → 必须提示"这是分页"
+    one = _run_decoder_multi([os.path.join(tmpdir, "抓包2.txt")])
+    check("只拿到一部分时会提示分页并教怎么合并",
+          one is not None and "分页" in one["out"], one and one["out"][:200])
+
     print("[6] 映射不到的列并进备注，不丢信息")
     messy = ("岗位\t单位\t地点\t网址\t备注\t其他说明\n"
              "嵌入式工程师\t昆明船舶设备集团\t昆明\thttps://example.com/job\t国企正式编\t需要倒班\n")
@@ -143,6 +161,28 @@ def main() -> int:
     note = jobs_m[0]["description"] if jobs_m else ""
     check("未映射列（其他说明）并进备注", "其他说明：需要倒班" in note, note)
     check("备注列本身也保留", "国企正式编" in note, note)
+
+    print("[6b] 飞书岗位表的真实形态：第一列是「更新日期」，没有「岗位」列")
+    # 用户那份表的列就是：更新日期 | 公司名称 | 企业性质 | 行业分类
+    real = ("更新日期,公司名称,企业性质,行业分类\n"
+            "2026/09/16,中国铁建集团,央企,建筑\n"
+            "2026/09/16,渤海银行,银行,金融\n"
+            "2026/09/15,新特能源,民企,新能源\n")
+    rr = wz.parse_text(real, source="飞书导出")
+    mpr = wz.guess_mapping(rr["headers"], rr["rows"])
+    check("认不出岗位列时，不拿日期当岗位名", mpr.get("title") != 0, mpr)
+    check("退而取公司名当岗位名", mpr.get("title") == 1, mpr)
+    check("公司列同时映射到公司字段", mpr.get("company") == 1, mpr)
+    jobs_r, _ = wz.build_jobs(rr["headers"], rr["rows"], mpr, source="飞书导出")
+    check("岗位名 = 公司名（不是日期）", jobs_r and jobs_r[0]["title"] == "中国铁建集团",
+          jobs_r[:1])
+    check("企业性质/行业分类没丢，进了备注",
+          "企业性质：央企" in (jobs_r[0]["description"] if jobs_r else ""),
+          jobs_r[0]["description"] if jobs_r else "")
+    # 无表头时也不能拿日期当岗位名
+    rn = wz.parse_text("2026/09/16\t中国铁建集团\t央企\n2026/09/16\t渤海银行\t银行\n", source="无表头")
+    mpn = wz.guess_mapping(rn["headers"], rn["rows"])
+    check("无表头时同样跳过日期列", mpn.get("title") == 1, mpn)
 
     print("[7] 入库 + 去重（同一条导两次只能有一条）")
     res1 = wz.commit(jobs)
@@ -200,6 +240,50 @@ def _make_xlsx(rows) -> bytes:
         z.writestr("xl/worksheets/sheet1.xml", sheet)
         z.writestr("xl/sharedStrings.xml", shared)
     return buf.getvalue()
+
+
+def _make_pages():
+    """造两个'分页响应'（第二条在两页里都有，用来验去重）。"""
+    def page(recs, total):
+        payload = {"code": 0, "data": {"total": total, "has_more": True, "records": recs}}
+        return base64.b64encode(
+            gzip.compress(json.dumps(payload, ensure_ascii=False).encode("utf-8"))).decode()
+    p1 = page([{"record_id": "rec1", "fields": {"更新日期": 1795795200000,
+                                                "公司名称": "中国铁建集团", "企业性质": "央企"}},
+               {"record_id": "rec2", "fields": {"公司名称": "渤海银行", "企业性质": "银行"}}], 3)
+    p2 = page([{"record_id": "rec2", "fields": {"公司名称": "渤海银行", "企业性质": "银行"}},
+               {"record_id": "rec3", "fields": {"公司名称": "新特能源", "企业性质": "民企"}}], 3)
+    return p1, p2
+
+
+def _run_decoder_multi(paths: list):
+    """跑 解码飞书表格.py（多文件），返回 {rows, text, out, warn}；跑完还原产物文件。"""
+    import shutil
+    import subprocess
+    script = ROOT / "解码飞书表格.py"
+    out_csv = ROOT / "data" / "飞书岗位导出.csv"
+    if not script.exists():
+        return None
+    backup = None
+    if out_csv.exists():
+        backup = str(out_csv) + ".bak_test"
+        shutil.copy2(out_csv, backup)
+    r = subprocess.run([sys.executable, str(script)] + list(paths),
+                       cwd=str(ROOT), capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
+    out = (r.stdout or "") + (r.stderr or "")
+    rows, text = 0, ""
+    if out_csv.exists():
+        with open(out_csv, encoding="utf-8-sig") as f:
+            text = f.read()
+        rows = max(0, len([ln for ln in text.splitlines() if ln.strip()]) - 1)
+    if backup:
+        shutil.copy2(backup, out_csv)
+        os.remove(backup)
+    elif out_csv.exists():
+        os.remove(out_csv)                       # 测试前本来没有 → 别留垃圾
+    warn = "分页" in out
+    return {"rows": rows, "text": text, "out": out, "warn": warn}
 
 
 def _run_decoder(blob: str, tmpdir: str):

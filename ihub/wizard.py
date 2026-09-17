@@ -17,8 +17,26 @@ import io
 import re
 import zipfile
 
-from .importer import (_detect, _first_line, _guess_by_content, _looks_like_header,
+from .importer import (_DATE_CELL_RE, _URL_RE, _detect, _guess_by_content, _looks_like_header,
                        _norm_cell, _sniff_delimiter)
+
+# 「2026/09/16」「2026-09-16」「9月16日」这类当不了岗位名
+_DATE_ONLY_RE = re.compile(r"^(20\d{2}[-/.年]\d{1,2}([-/.月]\d{1,2})?日?|\d{1,2}[-/月]\d{1,2}日?)$")
+# 纯数字/金额/百分比也当不了
+_NUM_ONLY_RE = re.compile(r"^[\d\s,.%元万kK+\-]+$")
+
+
+def name_like(s) -> bool:
+    """这个单元格像不像「名字」（岗位名/公司名）——用来兜底挑岗位列。
+
+    飞书岗位表第一列经常是"更新日期"，老逻辑直接取第一列当岗位名，结果整表岗位名全是日期。
+    """
+    s = _norm_cell(s)
+    if not s or len(s) > 40:
+        return False
+    if _URL_RE.match(s) or _DATE_ONLY_RE.match(s) or _DATE_CELL_RE.match(s) or _NUM_ONLY_RE.match(s):
+        return False
+    return bool(re.search(r"[A-Za-z\u4e00-\u9fa5]", s))
 
 # (字段 key, 中文名, 是否必填)
 STANDARD_FIELDS = [
@@ -197,6 +215,14 @@ def guess_mapping(headers: list, sample_rows: list = None) -> dict:
         for f in _FROM_IMPORTER:
             if f in guessed:
                 mp[f] = guessed[f]
+    if "title" not in mp and sample_rows:
+        # 还没定下来 → 挑第一个"像名字"的列。
+        # 这一步是为「更新日期 | 公司名称 | 企业性质」这类表准备的：
+        # 岗位列认不出来时，把公司名当岗位名，也比拿一列日期强。
+        for i, c in enumerate(sample_rows[0]):
+            if name_like(c):
+                mp["title"] = i
+                break
     if "title" not in mp and headers:
         mp["title"] = 0                 # 兜底：第一列当岗位名，总比整份丢掉强
     return mp
