@@ -230,7 +230,8 @@ console.log('[10] 面板 UI');
     root.descendants.length);
   api.buildPanel();
   const btns = root.descendants.filter(d => d.tagName === 'BUTTON').map(b => b.innerText);
-  check('面板有「填入空字段」', btns.includes('填入空字段'), btns);
+  check('面板有「填入空字段」主按钮（v5 带 🚀 前缀）',
+    btns.some(b => String(b).includes('填入空字段')), btns.slice(0, 6));
   check('面板有「覆盖全部」', btns.includes('覆盖全部'), btns);
   const inputs = root.descendants.filter(d => d.tagName === 'INPUT');
   check('面板里能逐字段改资料（约 37 个输入框）', inputs.length >= 30, inputs.length);

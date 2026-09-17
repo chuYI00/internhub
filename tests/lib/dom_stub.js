@@ -170,6 +170,12 @@ El.prototype.addEventListener = function (type, fn) {
   this._listeners = this._listeners || {};
   (this._listeners[type] = this._listeners[type] || []).push(fn);
 };
+/* v5：填充报告里「点一下跳到那个字段」要靠这两个，打桩里记下调用次数供断言 */
+El.prototype.scrollIntoView = function (opt) {
+  this._scrolled = (this._scrolled || 0) + 1;
+  this._scrollOpt = opt;
+};
+El.prototype.focus = function () { this._focused = (this._focused || 0) + 1; };
 El.prototype.contains = function (node) {
   if (node === this) return true;
   return this.descendants.indexOf(node) >= 0;

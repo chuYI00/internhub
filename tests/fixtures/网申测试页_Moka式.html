@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Moka 式网申模拟页（InternHub 网申助手自检用）</title>
+<style>
+  body { font: 14px/1.7 "Microsoft YaHei", sans-serif; margin: 0; background: #f5f6f8; color: #1f2328; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 24px 24px 160px; }
+  h1 { font-size: 20px; }
+  .steps { display: flex; gap: 8px; margin-bottom: 12px; }
+  .steps button { padding: 8px 18px; border: 1px solid #d9d9d9; background: #fff; border-radius: 6px; cursor: pointer; }
+  .steps button.on { background: #1677ff; color: #fff; border-color: #1677ff; }
+  .card { background: #fff; border-radius: 8px; padding: 20px 24px; margin-bottom: 16px; }
+  .step { display: none; }
+  .step.on { display: block; }
+  .row { display: flex; align-items: flex-start; margin: 10px 0; }
+  .row .k { flex: 0 0 150px; text-align: right; padding-right: 12px; color: #555; }
+  .row .v { flex: 1; }
+  input, textarea, select { width: 320px; padding: 5px 8px; border: 1px solid #d9d9d9; border-radius: 6px; font: inherit; }
+  textarea { height: 58px; }
+  .tip { background: #fffbe6; border: 1px solid #ffe58f; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Moka 式网申模拟页（分步表单 · 原生控件 + placeholder）</h1>
+  <div class="tip">
+    Moka 的特点：<b>分步骤</b>，后面几步默认 <code>display:none</code>，
+    要一步步点过去才填得到。装了网申助手后请：<b>每一步点一次「🚀 填入空字段」</b>。
+  </div>
+  <div class="steps">
+    <button class="on" onclick="go(0)">第 1 步 基本信息</button>
+    <button onclick="go(1)">第 2 步 教育背景</button>
+    <button onclick="go(2)">第 3 步 经历与附件</button>
+  </div>
+  <div class="card">
+    <div class="step on" id="s0"></div>
+    <div class="step" id="s1"></div>
+    <div class="step" id="s2"></div>
+  </div>
+  <button onclick="score()" style="padding:8px 16px">算一下填充率</button>
+  <pre id="out" style="background:#fff;padding:12px;border-radius:8px"></pre>
+</div>
+<script>
+var STEPS = [
+  [ /* 第 1 步 */
+    ['姓名','text'], ['性别','select',['男','女']], ['出生日期','text'],
+    ['政治面貌','select',['中共党员','共青团员','群众']], ['民族','text'],
+    ['身份证号','text'], ['手机号码','text'], ['电子邮箱','text'],
+    ['微信号','text'], ['QQ','text'], ['现居住地','text'], ['籍贯','text'],
+    ['高考省份','text'], ['户口性质','select',['农业户口','非农业户口']],
+    ['通讯地址','text'], ['邮政编码','text'],
+    ['身高（cm）','text'], ['体重（kg）','text'], ['健康状况','text'],
+    ['婚姻状况','select',['未婚','已婚']]
+  ],
+  [ /* 第 2 步 */
+    ['毕业院校','text'], ['所在学院','text'], ['所学专业','text'], ['专业类别','text'],
+    ['最高学历','select',['大专','本科','硕士研究生']], ['学位','select',['学士','硕士']],
+    ['学制','text'], ['培养方式','text'], ['入学时间','text'], ['毕业时间','text'],
+    ['GPA','text'], ['专业排名','text'],
+    ['外语水平','select',['CET-4','CET-6','无']], ['英语四级成绩','text'],
+    ['计算机等级','text'], ['普通话水平','text'],
+    ['获得证书','textarea'], ['奖学金/荣誉','textarea'], ['奖惩情况','textarea'],
+    ['研究方向','text'], ['毕业论文','text']
+  ],
+  [ /* 第 3 步 */
+    ['紧急联系人','text'], ['紧急联系人电话','text'], ['与本人关系','text'],
+    ['紧急联系人地址','text'], ['家庭主要成员','textarea'],
+    ['是否有亲属在本单位工作','select',['是','否']],
+    ['求职意向','text'], ['期望工作城市','text'], ['期望薪资','text'], ['到岗时间','text'],
+    ['是否服从调剂','select',['是','否']], ['第一志愿','text'],
+    ['信息来源','text'], ['兴趣爱好','text'], ['学生干部','text'],
+    ['社会实践','textarea'], ['项目经历','textarea'], ['专业技能','textarea'],
+    ['个人亮点','textarea'], ['自我评价','textarea'], ['申请理由','textarea']
+  ]
+];
+
+STEPS.forEach(function (fields, si) {
+  var host = document.getElementById('s' + si);
+  var h = document.createElement('h3');
+  h.textContent = '第 ' + (si + 1) + ' 步';
+  host.appendChild(h);
+  fields.forEach(function (f, i) {
+    var row = document.createElement('div');
+    row.className = 'row';
+    var k = document.createElement('div');
+    k.className = 'k';
+    k.textContent = f[0];
+    var v = document.createElement('div');
+    v.className = 'v';
+    var id = 's' + si + 'f' + i, el;
+    if (f[1] === 'select') {
+      el = document.createElement('select');
+      var o0 = document.createElement('option'); o0.textContent = '请选择'; o0.value = ''; el.appendChild(o0);
+      f[2].forEach(function (t) {
+        var o = document.createElement('option'); o.textContent = t; o.value = t; el.appendChild(o);
+      });
+    } else if (f[1] === 'textarea') {
+      el = document.createElement('textarea');
+    } else {
+      el = document.createElement('input'); el.type = 'text';
+    }
+    el.id = id;
+    el.setAttribute('placeholder', '请输入' + f[0]);
+    el.setAttribute('aria-label', f[0]);
+    v.appendChild(el);
+    row.appendChild(k); row.appendChild(v); host.appendChild(row);
+  });
+});
+
+function go(i) {
+  document.querySelectorAll('.step').forEach(function (s, idx) { s.classList.toggle('on', idx === i); });
+  document.querySelectorAll('.steps button').forEach(function (b, idx) { b.classList.toggle('on', idx === i); });
+}
+
+function score() {
+  var total = 0, done = 0, miss = [];
+  STEPS.forEach(function (fields, si) {
+    fields.forEach(function (f, i) {
+      var el = document.getElementById('s' + si + 'f' + i);
+      total++;
+      var val = el.tagName === 'SELECT' ? el.value : String(el.value || '').trim();
+      if (val) done++; else miss.push('第' + (si + 1) + '步·' + f[0]);
+    });
+  });
+  var pct = Math.round(done / total * 100);
+  document.getElementById('out').textContent =
+    '填充率：' + done + '/' + total + ' = ' + pct + '%\n\n' +
+    (miss.length ? '还没填上的（' + miss.length + '，注意分步表单要每步各点一次）：\n' + miss.join('\n') : '全部填上了 ✅');
+  window.__fillScore = { total: total, done: done, pct: pct, miss: miss };
+}
+</script>
+</body>
+</html>

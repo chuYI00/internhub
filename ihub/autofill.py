@@ -42,6 +42,30 @@ except Exception:                                     # pragma: no cover - 兜�
         "emergency_name", "emergency_phone", "emergency_relation", "marital",
     ]
 
+# v5 新增：国企 / 央国企网申的特色字段（原 40 类不够用，补齐到 70 类）
+EXTRA_KEYS = [
+    "height", "weight", "health", "rewards", "family",
+    "obey_adjust", "exam_province", "household_type", "join_party", "relative",
+    "computer_level", "mandarin", "training_mode", "schooling_length", "major_category",
+    "source", "hobby", "student_cadre", "social_practice", "research",
+    "thesis", "patent", "archive", "bank", "volunteer1",
+    "cet4", "teacher", "emergency_addr", "spouse", "children",
+]
+for _k in EXTRA_KEYS:
+    if _k not in KEYS:
+        KEYS.append(_k)
+
+# 「基本不会错、但每次手填很烦」的默认值。用户资料里有的以资料为准，
+# 面板里改过会存本机（override），不会写回 profile.json。
+EXTRA_DEFAULTS = {
+    "obey_adjust": "是",          # 是否服从调剂 —— 国企网申不勾基本等于弃权
+    "health": "健康",
+    "training_mode": "统招",
+    "schooling_length": "四年",
+    "degree_type": "学士",
+    "relative": "否",             # 有无亲属在本单位工作
+}
+
 
 def _packs() -> dict:
     if _tailor is None:
@@ -53,10 +77,10 @@ def _packs() -> dict:
 
 
 _TEMPLATE = r"""// ==UserScript==
-// @name         网申助手 v4（本地·本人使用）
+// @name         网申助手 v5（本地·本人使用）
 // @namespace    internhub.local
-// @version      3.0
-// @description  在网申/校招表单页一键填入个人资料，可按岗位方向切换自我评价/技能；本人点击触发，不代登录、不代提交、不联网
+// @version      5.0
+// @description  在网申/校招表单页一键填入个人资料（70 类字段，含国企特色字段）；三级标签识别 + 字段学习（教一次终身认识）+ 填充报告；本人点击触发，不代登录、不代提交、不联网
 // @match        *://*/*
 // @match        file:///*
 // @grant        GM_getValue
@@ -116,9 +140,28 @@ _TEMPLATE = r"""// ==UserScript==
     for (k in BASE) out[k] = BASE[k];
     var pk = PACKS[getDir()];
     if (pk) { for (k in pk) out[k] = pk[k]; }
+    /* 多档数据：同一个字段按岗位方向取不同值（期望薪资 / 求职意向 / 到岗时间） */
+    var rv = ROLE_VALS, d = getDir();
+    for (k in rv) {
+      var byRole = rv[k] || {};
+      var v = byRole[d];
+      if (v === undefined || v === '') v = byRole.universal;
+      // 只在资料里没值时才补 —— 你手填过的东西绝不被"方向默认值"悄悄改掉
+      if (v && !out[k]) out[k] = v;
+    }
     var ov = overrides();
     for (k in ov) out[k] = ov[k];
     return out;
+  }
+  /* 明确点一下才用「本方向的值」覆盖（求职意向 / 期望薪资 / 到岗时间） */
+  function applyRoleDefaults() {
+    var rv = ROLE_VALS, d = getDir(), n = 0;
+    for (var k in rv) {
+      var v = (rv[k] || {})[d];
+      if (v === undefined || v === '') v = (rv[k] || {}).universal;
+      if (v) { setOverride(k, v); n++; }
+    }
+    return n;
   }
 
   /* ==================== 字段字典 ==================== */
@@ -162,8 +205,92 @@ _TEMPLATE = r"""// ==UserScript==
     { k: 'emergency_name', label: '紧急联系人', keys: ['紧急联系人', '紧急联络人', '联系人姓名', 'emergencyname'] },
     { k: 'emergency_phone', label: '紧急联系人电话', keys: ['紧急联系人电话', '紧急联系电话', '联系人电话', 'emergencyphone'] },
     { k: 'emergency_relation', label: '与本人关系', keys: ['与本人关系', '联系人与本人关系', '关系', 'relation'] },
-    { k: 'marital',   label: '婚姻状况', keys: ['婚姻状况', '婚否', 'marital'] }
+    { k: 'emergency_addr', label: '紧急联系人地址', keys: ['紧急联系人地址', '紧急联系人通讯地址', '联系人地址', 'emergencyaddress'] },
+    { k: 'marital',   label: '婚姻状况', keys: ['婚姻状况', '婚否', 'marital'] },
+    { k: 'spouse',    label: '配偶信息', keys: ['配偶姓名', '配偶情况', '配偶', 'spouse'] },
+    { k: 'children',  label: '子女情况', keys: ['子女情况', '子女', '生育情况', 'children'] },
+    /* ---- v5 新增：国企 / 央国企网申特色字段 ---- */
+    { k: 'height',    label: '身高',     keys: ['身高', 'height'] },
+    { k: 'weight',    label: '体重',     keys: ['体重', 'weight'] },
+    { k: 'health',    label: '健康状况', keys: ['健康状况', '身体状况', '健康情况', '健康', 'health'] },
+    { k: 'rewards',   label: '奖惩情况', keys: ['奖惩情况', '奖惩', '所受处分', '处分情况', '处分'] },
+    { k: 'family',    label: '家庭成员', keys: ['家庭主要成员', '主要家庭成员', '家庭成员', '家属信息', '直系亲属', 'family'] },
+    { k: 'obey_adjust', label: '是否服从调剂', keys: ['是否服从调剂', '服从调剂', '是否接受调剂', '是否服从分配', '接受调配', '是否接受调配'] },
+    { k: 'exam_province', label: '高考省份', keys: ['高考省份', '高考所在地', '高考生源地', '生源地省份'] },
+    { k: 'household_type', label: '户口性质', keys: ['户口性质', '户籍性质', '农业非农业', '户口类别'] },
+    { k: 'join_party', label: '入党/入团时间', keys: ['入党时间', '入党日期', '入党年月', '入团时间', '政治面貌时间'] },
+    { k: 'relative',  label: '亲属是否在本单位', keys: ['是否有亲属在本单位', '亲属在本单位', '有无亲属', '是否有亲属'] },
+    { k: 'computer_level', label: '计算机等级', keys: ['计算机等级', '计算机水平', '全国计算机', '计算机证书'] },
+    { k: 'cet4',      label: '英语四级成绩', keys: ['四级成绩', '英语四级', 'cet4', 'cet-4'] },
+    { k: 'mandarin',  label: '普通话水平', keys: ['普通话水平', '普通话等级', '普通话'] },
+    { k: 'training_mode', label: '培养方式', keys: ['培养方式', '统招', '定向'] },
+    { k: 'schooling_length', label: '学制', keys: ['学制', '学习年限'] },
+    { k: 'degree_type', label: '学位',    keys: ['学位', '学士学位', '授予学位'] },
+    { k: 'major_category', label: '专业类别', keys: ['专业类别', '学科门类', '专业大类', '专业门类'] },
+    { k: 'source',    label: '信息来源', keys: ['信息来源', '从何处了解', '了解渠道', '招聘信息来源', '获知渠道'] },
+    { k: 'hobby',     label: '兴趣爱好', keys: ['兴趣爱好', '个人爱好', '特长爱好', 'hobby'] },
+    { k: 'student_cadre', label: '学生干部', keys: ['学生干部', '是否担任学生干部', '担任职务', '班干部', '校内职务'] },
+    { k: 'social_practice', label: '社会实践', keys: ['社会实践', '社会活动', '实践活动'] },
+    { k: 'research',  label: '研究方向', keys: ['研究方向', '研究内容', 'research'] },
+    { k: 'thesis',    label: '论文',     keys: ['毕业论文', '发表论文', '论文情况', '论文'] },
+    { k: 'patent',    label: '专利',     keys: ['专利情况', '发明专利', '专利'] },
+    { k: 'archive',   label: '档案所在地', keys: ['档案所在地', '档案地址', '档案存放', '档案接收'] },
+    { k: 'bank',      label: '银行卡号', keys: ['银行卡号', '银行卡', '开户行', '工资卡'] },
+    { k: 'volunteer1', label: '第一志愿', keys: ['第一志愿', '第一意向', '志愿岗位', '报考志愿'] },
+    { k: 'teacher',   label: '辅导员/导师', keys: ['辅导员', '班主任', '指导教师', '导师姓名'] }
   ];
+
+  /* 面板里按组展示（70 个字段平铺会看花眼） */
+  var GROUPS = [
+    { g: 'base',    name: '基本信息' },
+    { g: 'edu',     name: '教育背景' },
+    { g: 'contact', name: '联系方式' },
+    { g: 'job',     name: '求职意向' },
+    { g: 'family',  name: '家庭与紧急联系人' },
+    { g: 'other',   name: '其他（奖惩 / 证书 / 附加）' }
+  ];
+  var GROUP_OF = {
+    name: 'base', gender: 'base', birth: 'base', political: 'base', nation: 'base',
+    idcard: 'base', marital: 'base', height: 'base', weight: 'base', health: 'base',
+    household_type: 'base', hobby: 'base', source: 'base',
+    school: 'edu', college: 'edu', major: 'edu', major_category: 'edu', degree: 'edu',
+    degree_type: 'edu', edu_range: 'edu', enroll: 'edu', graduate_year: 'edu',
+    gpa: 'edu', rank: 'edu', training_mode: 'edu', schooling_length: 'edu',
+    student_cadre: 'edu', research: 'edu', thesis: 'edu', patent: 'edu', teacher: 'edu',
+    phone: 'contact', email: 'contact', wechat: 'contact', qq: 'contact',
+    city: 'contact', hometown: 'contact', address: 'contact', postal: 'contact',
+    exam_province: 'contact', archive: 'contact', bank: 'contact',
+    intent: 'job', expected_city: 'job', expected_salary: 'job', available: 'job',
+    self_eval: 'job', highlights: 'job', skills: 'job', experiences: 'job',
+    reason: 'job', volunteer1: 'job', obey_adjust: 'job', social_practice: 'job',
+    emergency_name: 'family', emergency_phone: 'family', emergency_relation: 'family',
+    emergency_addr: 'family', family: 'family', spouse: 'family', children: 'family',
+    relative: 'family',
+    english: 'other', cet4: 'other', computer_level: 'other', mandarin: 'other',
+    certificates: 'other', scholarship: 'other', rewards: 'other', join_party: 'other'
+  };
+  FIELDS.forEach(function (f) { f.g = GROUP_OF[f.k] || 'other'; });
+
+  /* 多档数据：同一个字段，不同岗位方向填不同的值（技术岗 / 操作岗口径不一样） */
+  var ROLE_VALS = {
+    expected_salary: {
+      universal: '6000-8000', hw: '7000-9000', iot: '7000-9000', ai: '8000-10000',
+      auto: '6500-8500', test: '6000-8000', aviation: '6000-8000',
+      prod: '6000-8000', media: '5000-7000'
+    },
+    intent: {
+      universal: '电子信息 / 物联网 / 自动化相关技术岗', hw: '嵌入式开发 / 硬件研发',
+      iot: '物联网开发 / 嵌入式应用', ai: 'AI 应用开发 / 算法工程',
+      auto: '自动化 / 电气控制', test: '测试 / 运维 / 技术支持',
+      aviation: '民航信息技术 / 机场运行保障', prod: '产品 / 技术支持',
+      media: '内容运营 / AI 创作'
+    },
+    available: {
+      universal: '随时可到岗', hw: '随时可到岗', iot: '随时可到岗', ai: '随时可到岗',
+      auto: '随时可到岗', test: '随时可到岗', aviation: '随时可到岗',
+      prod: '随时可到岗', media: '随时可到岗'
+    }
+  };
 
   /* ==================== 工具 ==================== */
   function norm(s) { return String(s == null ? '' : s).replace(/[\s\u3000*＊:：?？()（）、,，.。/|]/g, '').toLowerCase(); }
@@ -281,20 +408,116 @@ _TEMPLATE = r"""// ==UserScript==
     return parts.filter(Boolean).join(' | ');
   }
 
-  // 返回命中的字段（取"命中关键词最长"者，降低误配）
-  function bestField(label) {
+  /* ==================== 字段学习（v5 核心：越用越聪明） ====================
+     遇到没认出来的字段，你在面板里指定一次「这栏是身高」，
+     之后**任何网站**再遇到同样叫法的栏目都会自动填。
+     学习库存在本机（油猴存储优先），可导出/导入换电脑。                       */
+  var LEARN_KEY = 'ihub_field_learn_v1';
+  function learnMap() {
+    try { return JSON.parse(storeGet(LEARN_KEY) || '{}') || {}; } catch (e) { return {}; }
+  }
+  function learnSave(m) { storeSet(LEARN_KEY, JSON.stringify(m || {})); }
+  function learnAdd(label, fieldKey) {
+    var k = norm(label);
+    if (!k || !fieldKey) return false;
+    var m = learnMap();
+    m[k] = { k: fieldKey, ts: Date.now() };
+    learnSave(m);
+    return true;
+  }
+  function learnDel(label) {
+    var m = learnMap();
+    delete m[norm(label)];
+    learnSave(m);
+  }
+  // 三级第 0 级：先查学习库（精确 → 特征包含 → 反包含）
+  function learnLookup(label) {
     var L = norm(label);
     if (!L) return null;
-    var best = null, bestLen = 0;
-    for (var i = 0; i < FIELDS.length; i++) {
-      var f = FIELDS[i];
-      for (var j = 0; j < f.keys.length; j++) {
-        var nk = norm(f.keys[j]);
-        if (!nk || nk.length < 2) continue;
-        if (L.indexOf(nk) >= 0 && nk.length > bestLen) { best = f; bestLen = nk.length; }
-      }
+    var m = learnMap(), k;
+    if (m[L] && m[L].k) return m[L].k;
+    for (k in m) {
+      if (k.length >= 3 && L.indexOf(k) >= 0) return m[k].k;
+      if (L.length >= 3 && k.indexOf(L) >= 0) return m[k].k;
+    }
+    return null;
+  }
+  function fieldByKey(k) {
+    for (var i = 0; i < FIELDS.length; i++) { if (FIELDS[i].k === k) return FIELDS[i]; }
+    return null;
+  }
+
+  /* 三级识别：
+     L1 精确  norm(label) 与关键词完全相等          → 1000+
+     L2 模糊  关键词是 label 的一部分                → 100+（取最长）
+     L3 上下文 上面都没中，改从「分组标题 / 表头 / 前驱文本」再认一次 */
+  function scoreField(f, L) {
+    var best = 0;
+    for (var j = 0; j < f.keys.length; j++) {
+      var nk = norm(f.keys[j]);
+      if (!nk || nk.length < 2) continue;
+      var s = 0;
+      if (L === nk) s = 1000 + nk.length * 10;
+      else if (L.indexOf(nk) >= 0) s = 100 + nk.length * 10;
+      else if (nk.length >= 3 && nk.indexOf(L) >= 0) s = 60 + L.length * 10;
+      if (s > best) best = s;
     }
     return best;
+  }
+  function bestScored(L) {
+    var best = null, bs = 0;
+    for (var i = 0; i < FIELDS.length; i++) {
+      var s = scoreField(FIELDS[i], L);
+      if (s > bs) { bs = s; best = FIELDS[i]; }
+    }
+    return { f: best, s: bs };
+  }
+  // L3 上下文：fieldset legend / 表单项标题 / 表格行首列 / 前驱大标题
+  function contextLabel(el, doc) {
+    var parts = [];
+    function add(v) {
+      var t = String(v || '').trim();
+      if (!t) return;
+      for (var i = 0; i < parts.length; i++) { if (parts[i] === t) return; }  /* 去重 */
+      parts.push(t);
+    }
+    try {
+      var fs = el.closest ? el.closest('fieldset') : null;
+      if (fs) { var lg = fs.querySelector ? fs.querySelector('legend') : null; if (lg) add(visText(lg)); }
+      var th = el.closest ? el.closest('tr') : null;
+      if (th) { var first = th.children ? th.children[0] : null; if (first && first !== el) add(visText(first)); }
+    } catch (e) {}
+    var n = el && el.parentElement, d = 0;
+    while (n && d < 5) {
+      var t = visText(n);
+      if (t && t.length <= 60 && controlCount(n) <= 3) { add(t); break; }
+      n = n.parentElement; d++;
+    }
+    return parts.join(' | ');
+  }
+  function bestField(label, el, doc) {
+    var L = norm(label);
+    var r = { f: null, s: 0 };
+    if (L) {
+      /* L0：学习库（用户教过的优先，且权重最高） */
+      var lk = learnLookup(L);
+      if (lk) { var lf = fieldByKey(lk); if (lf) return lf; }
+      /* L1 精确 / L2 模糊 */
+      r = bestScored(L);
+      if (r.f && r.s >= 100) return r.f;
+    }
+    /* L3：上下文再试一次（裸输入框在「政治面貌」分组里、表格行首列当题目…） */
+    if (el && doc) {
+      var ctx = norm(contextLabel(el, doc));
+      if (ctx && ctx !== L) {
+        var lk2 = learnLookup(ctx);
+        if (lk2) { var lf2 = fieldByKey(lk2); if (lf2) return lf2; }
+        var r2 = bestScored(ctx);
+        if (r2.f && r2.s >= 100) return r2.f;
+      }
+    }
+    /* 都不中，但模糊分还算高（>=60，关键词包含 label）时也认 —— 例如 label 只有"邮箱"两字 */
+    return (r.f && r.s >= 60) ? r.f : null;
   }
 
   /* ==================== 写值 ==================== */
@@ -325,6 +548,34 @@ _TEMPLATE = r"""// ==UserScript==
     if (w.length >= 2 && t.length >= 2 && w.slice(0, 2) === t.slice(0, 2)) return true;  /* 云南大理 ↔ 云南省 */
     return false;
   }
+  /* 下拉选项同义词：资料里写「本科」，选项里只有「学士」—— 必须认成同一个 */
+  var OPT_SYN = [
+    ['本科', '学士', '大学本科', '大学', '本科及以上'],
+    ['硕士', '研究生', '硕士研究生', '硕士研究生及以上'],
+    ['博士', '博士研究生'],
+    ['大专', '专科', '高职', '专科及以上'],
+    ['共青团员', '团员', '共青团'],
+    ['中共党员', '党员', '预备党员', '中共预备党员'],
+    ['群众', '无党派人士', '无党派'],
+    ['汉族', '汉'],
+    ['男', '男性'], ['女', '女性'],
+    ['未婚', '未'], ['已婚', '已'],
+    ['是', '愿意', '同意', '接受', '服从', '有'],
+    ['否', '不愿意', '不同意', '不接受', '不服从', '无']
+  ];
+  function synMatch(want, text) {
+    var w = norm(want), t = norm(text);
+    if (!w || !t) return false;
+    for (var i = 0; i < OPT_SYN.length; i++) {
+      var g = OPT_SYN[i], inW = false, inT = false, j;
+      for (j = 0; j < g.length; j++) {
+        if (g[j] === w) inW = true;
+        if (g[j] === t) inT = true;
+      }
+      if (inW && inT) return true;
+    }
+    return false;
+  }
   function fillSelect(el, val) {
     var opts = Array.prototype.slice.call(el.options || []);
     if (!opts.length) return false;
@@ -334,6 +585,9 @@ _TEMPLATE = r"""// ==UserScript==
     }
     if (!hit) for (i = 0; i < opts.length; i++) {   /* 2) 互相包含 / 前两字相同 */
       if (looseMatch(val, opts[i].textContent) || looseMatch(val, opts[i].value)) { hit = opts[i]; break; }
+    }
+    if (!hit) for (i = 0; i < opts.length; i++) {   /* 3) 同义词：本科 ↔ 学士 */
+      if (synMatch(val, opts[i].textContent) || synMatch(val, opts[i].value)) { hit = opts[i]; break; }
     }
     if (!hit) return false;
     try { el.value = hit.value; } catch (e) {}
@@ -382,12 +636,46 @@ _TEMPLATE = r"""// ==UserScript==
       var t = String(attr(el, 'type') || 'text').toLowerCase();
       if (['hidden', 'file', 'submit', 'button', 'reset', 'image', 'password'].indexOf(t) >= 0) return;
       if (!isVisible(el)) return;
+      // 面板自己的输入框不算表单字段（Shadow DOM 里其实扫不到，非 Shadow 的降级环境要挡一下）
+      try { if (el.closest && el.closest('[data-ihub-panel]')) return; } catch (e) {}
       out.push(el);
     });
     return out;
   }
 
-  function fillRadios(doc, prof, onlyEmpty, report) {
+  // 「需人工」清单：填不进去的每一项都留着元素引用，面板里点一下就能滚过去
+  function needHuman(failed, el, label, f, reason) {
+    failed.push({
+      el: el,
+      label: String(label || '').slice(0, 40),
+      key: f ? f.k : '',
+      keyLabel: f ? f.label : '',
+      reason: reason
+    });
+  }
+
+  function fillCheckboxes(doc, prof, onlyEmpty, report, failed) {
+    var n = 0, boxes;
+    try { boxes = doc.querySelectorAll('input[type=checkbox]'); } catch (e) { return 0; }
+    Array.prototype.slice.call(boxes).forEach(function (b) {
+      if (!isVisible(b)) return;
+      if (onlyEmpty && b.checked) return;
+      var lab = labelOf(b, doc);
+      var f = bestField(lab, b, doc);
+      if (!f) return;
+      var val = String(prof[f.k] || '').trim();
+      if (!val) { needHuman(failed, b, lab, f, '资料里没有「' + f.label + '」的值'); return; }
+      if (!/^(是|有|愿意|同意|接受|true|1|yes|y)$/i.test(val)) return;   /* "否"就不勾 */
+      try {
+        if (!b.checked) { b.checked = true; fire(b); }
+        mark(b, true); n++;
+        report.push(f.label + '→已勾选');
+      } catch (e) {}
+    });
+    return n;
+  }
+
+  function fillRadios(doc, prof, onlyEmpty, report, failed) {
     var groups = {};
     var radios;
     try { radios = doc.querySelectorAll('input[type=radio]'); } catch (e) { return 0; }
@@ -400,15 +688,16 @@ _TEMPLATE = r"""// ==UserScript==
     Object.keys(groups).forEach(function (key) {
       var g = groups[key];
       if (onlyEmpty && g.some(function (r) { return r.checked; })) return;
-      var f = bestField(groupLabel(g, doc));
-      if (!f) return;
+      var _gl = groupLabel(g, doc);
+      var f = bestField(_gl, g[0], doc);
+      if (!f) { needHuman(failed, g[0], _gl, null, '没认出这是什么字段'); return; }
       var val = prof[f.k];
-      if (!val) return;
+      if (!val) { needHuman(failed, g[0], _gl, f, '资料里没有「' + f.label + '」的值'); return; }
       var hit = g.filter(function (r) {
         var own = visText(r.closest && r.closest('label') ? r.closest('label') : r.parentElement);
         return norm(own) === norm(val) || looseMatch(val, own) || norm(r.value) === norm(val);
       })[0];
-      if (!hit) return;
+      if (!hit) { needHuman(failed, g[0], _gl, f, '选项里没有「' + val + '」（需手点）'); return; }
       try { hit.checked = true; fire(hit); mark(hit, true); n++; if (report) report.push(f.label + '→' + val); } catch (e) {}
     });
     return n;
@@ -445,6 +734,13 @@ _TEMPLATE = r"""// ==UserScript==
       var t = visText(o);
       if (t && (norm(t) === norm(want) || looseMatch(want, t))) hit = o;
     });
+    if (!hit) {
+      Array.prototype.slice.call(opts).forEach(function (o) {
+        if (hit || !isVisible(o)) return;
+        var t = visText(o);
+        if (t && synMatch(want, t)) hit = o;   /* 本科 ↔ 学士 */
+      });
+    }
     if (!hit) return false;
     try { hit.click(); return true; } catch (e) { return false; }
   }
@@ -484,7 +780,7 @@ _TEMPLATE = r"""// ==UserScript==
   }
 
   // 卡片式单选（antd Radio / element Radio / 通用 role=radio）
-  function fillCardRadios(doc, prof, report) {
+  function fillCardRadios(doc, prof, report, failed) {
     var items;
     try {
       items = doc.querySelectorAll('[role=radio],.ant-radio-wrapper,.el-radio,' +
@@ -523,15 +819,15 @@ _TEMPLATE = r"""// ==UserScript==
         if (t && norm(t) !== cur && t.length <= 80) { lab = t + ' ' + lab; break; }
         anc = anc.parentElement; d++;
       }
-      var f = bestField(lab.slice(0, 80));
-      if (!f) return;
+      var f = bestField(lab.slice(0, 80), g.opts[0], doc);
+      if (!f) { needHuman(failed, g.opts[0], lab, null, '没认出这是什么字段'); return; }
       var val = prof[f.k];
-      if (!val) return;
+      if (!val) { needHuman(failed, g.opts[0], lab, f, '资料里没有「' + f.label + '」的值'); return; }
       var hit = g.opts.filter(function (o) {
         var t = visText(o);
         return t && (norm(t) === norm(val) || looseMatch(val, t));
       })[0];
-      if (!hit) return;
+      if (!hit) { needHuman(failed, g.opts[0], lab, f, '选项里没有「' + val + '」（需手点）'); return; }
       try {
         hit.click(); mark(hit, true); n++;
         if (report) report.push(f.label + '→' + String(val).slice(0, 12) + '（卡片单选）');
@@ -540,34 +836,70 @@ _TEMPLATE = r"""// ==UserScript==
     return n;
   }
 
+  // 扫出"没认出来 / 认出来但没值"的字段 —— 面板里的「🧠 字段学习」用它
+  function scanUnknown(doc) {
+    var prof = P(), out = [], seen = {};
+    collect(doc).forEach(function (el) {
+      var t = String(attr(el, 'type') || 'text').toLowerCase();
+      if (t === 'radio' || t === 'checkbox') return;
+      var lab = labelOf(el, doc);
+      var f = bestField(lab, el, doc);
+      if (f && prof[f.k]) return;                 // 已经能自动填的不算
+      var key = norm(lab).slice(0, 40) || ('__' + out.length);
+      if (seen[key]) return;
+      seen[key] = 1;
+      out.push({ el: el, label: String(lab || '').slice(0, 40), field: f, hasValue: hasValue(el) });
+    });
+    return out;
+  }
+
   function fillDoc(doc, mode) {
     var prof = P();
     var onlyEmpty = mode !== 'overwrite';
-    var report = [];
-    var filled = fillRadios(doc, prof, onlyEmpty, report);
-    filled += fillCardRadios(doc, prof, report);      // 卡片式单选（自绘）
+    var report = [], failed = [];
+    var filled = fillRadios(doc, prof, onlyEmpty, report, failed);
+    filled += fillCardRadios(doc, prof, report, failed);      // 卡片式单选（自绘）
+    filled += fillCheckboxes(doc, prof, onlyEmpty, report, failed);
     collect(doc).forEach(function (el) {
       var t = String(attr(el, 'type') || 'text').toLowerCase();
       if (t === 'radio' || t === 'checkbox') return;
       if (onlyEmpty && hasValue(el)) return;
-      var f = bestField(labelOf(el, doc));
-      if (!f) return;
+      var lab = labelOf(el, doc);
+      var f = bestField(lab, el, doc);
+      if (!f) { needHuman(failed, el, lab, null, '没认出这是什么字段'); return; }
       var raw = prof[f.k];
-      if (!raw) return;
+      if (!raw) { needHuman(failed, el, lab, f, '资料里没有「' + f.label + '」的值'); return; }
       var val = adapt(el, raw);
       if (!val) return;
       var ok = false;
       try {
         if (el.tagName === 'SELECT') ok = fillSelect(el, val);
         else if (isEditable(el)) { el.innerText = val; fire(el); ok = true; }
-        else if (String(attr(el, 'readonly')) === 'true' || el.readOnly) { return; }
-        else { setNative(el, val); ok = true; }
+        else if (String(attr(el, 'readonly')) === 'true' || el.readOnly) {
+          needHuman(failed, el, lab, f, '这是只读框（点右边 📋 复制后手填）'); return;
+        } else { setNative(el, val); ok = true; }
       } catch (e) { ok = false; }
       if (ok) { mark(el, true); filled++; report.push(f.label + '→' + String(val).slice(0, 14)); }
+      else { needHuman(failed, el, lab, f, '填不进去（可能是自绘控件，用 📋 复制）'); }
     });
     // 自绘下拉：点开后选项才渲染，异步完成；这里只回报"尝试了几个"
     var fake = fillFakeSelects(doc, prof, report);
-    return { filled: filled, report: report, fakeSelects: fake };
+    return { filled: filled, report: report, failed: failed, fakeSelects: fake, unknown: failed.length };
+  }
+
+  // 一键滚到那个字段并高亮 —— 报告里点一下就跳过去（填完最费时间的就是找它）
+  function locate(el) {
+    if (!el) return;
+    try { if (el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
+    try { if (el.focus && el.focus) el.focus(); } catch (e) {}
+    try {
+      el.style.outline = '3px solid #d1242f';
+      el.style.outlineOffset = '2px';
+      el.style.boxShadow = '0 0 0 4px rgba(209,36,47,.18)';
+      setTimeout(function () {
+        try { el.style.outline = ''; el.style.boxShadow = ''; } catch (e2) {}
+      }, 2600);
+    } catch (e) {}
   }
 
   /* ==================== 跨 iframe ==================== */
@@ -591,6 +923,59 @@ _TEMPLATE = r"""// ==UserScript==
 
   /* ==================== 面板 ==================== */
   var panel = null, statusEl = null, listEl = null, dirSel = null;
+  var reportEl = null, learnEl = null, filterEl = null, hostEl = null, mountEl = null;
+  var missBtnEl = null;
+  var lastFailed = [], lastReport = [], lastStats = null;
+
+  /* 面板样式：放在 Shadow DOM 里，跟网站自己的 CSS 完全隔离
+     （碰过太多网申站把 z-index / font / box-sizing 全局改掉，面板一进去就散架） */
+  var CSS = [
+    '.ihub-p{position:fixed;right:16px;bottom:16px;z-index:2147483647;width:372px;max-height:80vh;',
+    'overflow:auto;background:#fff;border:1px solid #d0d7de;border-radius:12px;',
+    'box-shadow:0 10px 32px rgba(0,0,0,.22);font:13px/1.55 -apple-system,"Microsoft YaHei",sans-serif;',
+    'color:#1f2328;box-sizing:border-box}',
+    '.ihub-p *{box-sizing:border-box;font-family:inherit}',
+    '.ihub-hd{display:flex;align-items:center;justify-content:space-between;padding:9px 11px;',
+    'border-bottom:1px solid #eaeef2;background:#f6f8fa;border-radius:12px 12px 0 0;position:sticky;top:0;z-index:2}',
+    '.ihub-bd{padding:10px 11px}',
+    '.ihub-b{padding:5px 9px;border:1px solid #d0d7de;border-radius:7px;background:#f6f8fa;',
+    'cursor:pointer;font-size:12px;color:#1f2328}',
+    '.ihub-b:hover{background:#eef1f4}',
+    '.ihub-b.pri{background:#1f6feb;color:#fff;border-color:#1f6feb}',
+    '.ihub-b.ok{background:#1a7f37;color:#fff;border-color:#1a7f37}',
+    '.ihub-row{display:flex;gap:6px;align-items:center;margin:3px 0}',
+    '.ihub-tag{flex:0 0 88px;color:#57606a;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.ihub-in{flex:1;min-width:0;padding:3px 6px;border:1px solid #d0d7de;border-radius:6px;font-size:12px;color:#1f2328;background:#fff}',
+    '.ihub-grp{margin:8px 0 2px;color:#0969da;font-size:11px;font-weight:600;border-top:1px solid #eaeef2;padding-top:6px}',
+    '.ihub-sec{margin-top:9px;border-top:1px solid #eaeef2;padding-top:8px}',
+    '.ihub-sec b{font-size:12px}',
+    '.ihub-fail{display:flex;gap:6px;align-items:center;margin:3px 0;padding:3px 5px;border-radius:6px;background:#fff8f6;cursor:pointer}',
+    '.ihub-fail:hover{background:#ffebe9}',
+    '.ihub-fail span{flex:1;min-width:0;font-size:11px;color:#a40e26;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.ihub-fail em{font-style:normal;font-size:10px;color:#8c959f;flex:0 0 auto}',
+    '.ihub-x{padding:2px 7px;border:1px solid #d0d7de;border-radius:5px;background:#fff;font-size:11px;cursor:pointer;flex:0 0 auto}',
+    '.ihub-fab{position:fixed;right:16px;bottom:16px;z-index:2147483647;padding:10px 14px;background:#1f6feb;',
+    'color:#fff;border-radius:24px;cursor:pointer;font:13px -apple-system,"Microsoft YaHei",sans-serif;',
+    'box-shadow:0 4px 14px rgba(0,0,0,.28);user-select:none}'
+  ].join('');
+
+  // Shadow DOM 宿主：不支持就退回普通 div（打桩/老浏览器），功能一模一样
+  function ensureHost() {
+    if (hostEl && document.body && document.body.contains && document.body.contains(hostEl)) return mountEl;
+    hostEl = document.createElement('div');
+    hostEl.setAttribute('data-ihub', 'v5');
+    try { hostEl.style.cssText = 'all:initial'; } catch (e) {}
+    try { document.body.appendChild(hostEl); } catch (e) { return null; }
+    var sh = null;
+    try { sh = hostEl.attachShadow ? hostEl.attachShadow({ mode: 'open' }) : null; } catch (e2) { sh = null; }
+    mountEl = sh || hostEl;
+    try {
+      var st = document.createElement('style');
+      st.textContent = CSS;
+      mountEl.appendChild(st);
+    } catch (e3) {}
+    return mountEl;
+  }
 
   function copyText(t) {
     var s = String(t == null ? '' : t);
@@ -679,38 +1064,72 @@ _TEMPLATE = r"""// ==UserScript==
     return b;
   }
 
+  function fieldEditor(f, prof, ov) {
+    var row = el('div', 'display:flex;gap:6px;align-items:center;margin:3px 0');
+    var tag = el('div', 'flex:0 0 88px;color:' + (f.k in ov ? '#9a3412' : '#57606a') + ';font-size:12px' +
+      ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap',
+      f.label + (f.k in ov ? ' *' : ''));
+    var inp = el('input', 'flex:1;min-width:0;padding:3px 6px;border:1px solid #d0d7de;border-radius:5px;font-size:12px');
+    inp.setAttribute('data-ihub-panel', '1');
+    inp.value = prof[f.k] || '';
+    inp.placeholder = '未填（可在这里补）';
+    inp.addEventListener('change', function () {
+      var v = inp.value.trim();
+      if (v === (BASE[f.k] || '')) setOverride(f.k, ''); else setOverride(f.k, v);
+      refreshList();
+    });
+    // 每个字段一个复制按钮：遇到"填不进去"的奇葩页面（自绘控件、只读框、富文本编辑器），
+    // 直接复制粘贴也能把这一栏搞定 —— 这是"任何网页都能用"的兜底。
+    var cp = btn('📋', 'padding:2px 7px;font-size:11px;flex:0 0 auto', (function (key, label, box) {
+      return function () {
+        var v = (P()[key] || box.value || '');
+        var ok = copyText(v);
+        if (statusEl) {
+          statusEl.textContent = ok
+            ? '已复制「' + label + '」：' + String(v).slice(0, 24) + '… —— 到页面上粘贴即可'
+            : '复制失败，请手动选中输入框内容复制';
+        }
+      };
+    })(f.k, f.label, inp));
+    row.appendChild(tag); row.appendChild(inp); row.appendChild(cp);
+    return row;
+  }
+
+  var onlyMissing = false;
+  function missingCount(prof) {
+    var n = 0;
+    FIELDS.forEach(function (f) { if (!String(prof[f.k] || '').trim()) n++; });
+    return n;
+  }
   function refreshList() {
     if (!listEl) return;
     listEl.textContent = '';
     var prof = P(), ov = readOverrides();
-    FIELDS.forEach(function (f) {
-      var row = el('div', 'display:flex;gap:6px;align-items:center;margin:3px 0');
-      var tag = el('div', 'flex:0 0 84px;color:' + (f.k in ov ? '#9a3412' : '#57606a') + ';font-size:12px',
-        f.label + (f.k in ov ? ' *' : ''));
-      var inp = el('input', 'flex:1;min-width:0;padding:3px 6px;border:1px solid #d0d7de;border-radius:5px;font-size:12px');
-      inp.value = prof[f.k] || '';
-      inp.placeholder = '未填（可在这里补）';
-      inp.addEventListener('change', function () {
-        var v = inp.value.trim();
-        if (v === (BASE[f.k] || '')) setOverride(f.k, ''); else setOverride(f.k, v);
-        refreshList();
+    if (missBtnEl) {                       // 「只看缺的（N）」按钮上的数字
+      var mn = missingCount(prof);
+      missBtnEl.textContent = onlyMissing ? '← 看全部' : ('只看缺的（' + mn + '）');
+      missBtnEl.style.background = mn > 12 ? '#fff8f6' : '#f6f8fa';
+      missBtnEl.style.borderColor = mn > 12 ? '#ffcecb' : '#d0d7de';
+      missBtnEl.style.color = mn > 12 ? '#a40e26' : '#1f2328';
+    }
+    var q = norm(filterEl ? filterEl.value : '');
+    var shown = 0;
+    GROUPS.forEach(function (g) {
+      var items = FIELDS.filter(function (f) {
+        if (f.g !== g.g) return false;
+        // 「只看缺的」：填过的一律跳过 —— 补齐一次，以后每份网申都 100%
+        if (onlyMissing && String(prof[f.k] || '').trim()) return false;
+        if (!q) return true;
+        if (norm(f.label).indexOf(q) >= 0 || norm(f.k).indexOf(q) >= 0) return true;
+        return String(prof[f.k] || '').toLowerCase().indexOf(q) >= 0;
       });
-      // 每个字段一个复制按钮：遇到"填不进去"的奇葩页面（自绘控件、只读框、富文本编辑器），
-      // 直接复制粘贴也能把这一栏搞定 —— 这是"任何网页都能用"的兜底。
-      var cp = btn('📋', 'padding:2px 7px;font-size:11px;flex:0 0 auto', (function (key, label, box) {
-        return function () {
-          var v = (P()[key] || box.value || '');
-          var ok = copyText(v);
-          if (statusEl) {
-            statusEl.textContent = ok
-              ? '已复制「' + label + '」：' + String(v).slice(0, 24) + '… —— 到页面上粘贴即可'
-              : '复制失败，请手动选中输入框内容复制';
-          }
-        };
-      })(f.k, f.label, inp));
-      row.appendChild(tag); row.appendChild(inp); row.appendChild(cp);
-      listEl.appendChild(row);
+      if (!items.length) return;
+      listEl.appendChild(el('div', 'margin:8px 0 2px;color:#0969da;font-size:11px;font-weight:600;' +
+        'border-top:1px solid #eaeef2;padding-top:6px', g.name + '（' + items.length + '）'));
+      items.forEach(function (f) { listEl.appendChild(fieldEditor(f, prof, ov)); shown++; });
     });
+    if (!shown) listEl.appendChild(el('div', 'color:#8c959f;font-size:12px;padding:6px 0',
+      '没有匹配「' + (filterEl ? filterEl.value : '') + '」的字段。'));
   }
 
   function buildDirSelect(host) {
@@ -728,6 +1147,7 @@ _TEMPLATE = r"""// ==UserScript==
     dirSel.addEventListener('change', function () {
       setDir(dirSel.value);
       refreshList();
+      roleHint(dirSel.value);
       if (statusEl) {
         statusEl.textContent = '已切到「' + ((PACKS[dirSel.value] || {}).label || dirSel.value) +
           '」的自我评价 / 技能 / 亮点，直接点「填入空字段」即可。';
@@ -735,11 +1155,171 @@ _TEMPLATE = r"""// ==UserScript==
     });
     wrap.appendChild(dirSel);
     host.appendChild(wrap);
+    roleHintEl = el('div', 'font-size:11px;color:#8c959f;margin:0 0 6px 90px');
+    host.appendChild(roleHintEl);
+    roleHint(getDir());
+  }
+  var roleHintEl = null;
+  function roleHint(dir) {
+    if (!roleHintEl) return;
+    var d = dir || getDir();
+    var bits = [];
+    ['expected_salary', 'intent', 'available'].forEach(function (k) {
+      var v = (ROLE_VALS[k] || {})[d] || (ROLE_VALS[k] || {}).universal;
+      if (v) bits.push((k === 'expected_salary' ? '期望薪资 ' : k === 'intent' ? '意向 ' : '到岗 ') + v);
+    });
+    roleHintEl.textContent = '本方向默认值：' + bits.join('　｜　') +
+      '（资料里已有值的以资料为准，想换成这版点右边 ⤵）';
+  }
+
+  /* ============ 📊 填充报告：填完不静默，成功/需人工各列一份 ============ */
+  function renderReport(st) {
+    if (!reportEl) return;
+    reportEl.textContent = '';
+    var okN = st.filled, badN = (st.failed || []).length;
+    var head = el('div', 'display:flex;align-items:center;justify-content:space-between');
+    head.appendChild(el('b', 'font-size:12px;color:' + (badN ? '#9a6700' : '#1a7f37'),
+      '📊 ' + (badN ? '已填 ' + okN + ' 项，还有 ' + badN + ' 项要你来处理' : '全部搞定：已填 ' + okN + ' 项')));
+    var fold = btn(okN ? '收起' : '展开', 'padding:2px 7px;font-size:11px', function () {
+      var b = reportEl.querySelector ? reportEl.querySelectorAll('div.ihub-oklist')[0] : null;
+      if (b) { b.style.display = (b.style.display === 'none' ? 'block' : 'none'); fold.textContent = (b.style.display === 'none' ? '展开' : '收起'); }
+    });
+    head.appendChild(fold);
+    reportEl.appendChild(head);
+
+    if (okN) {
+      var ol = el('div', 'max-height:132px;overflow:auto;margin:4px 0 0;font-size:11px;color:#1a7f37;line-height:1.7');
+      ol.setAttribute('class', 'ihub-oklist');
+      (st.report || []).forEach(function (r) { ol.appendChild(el('div', '', '✅ ' + r)); });
+      reportEl.appendChild(ol);
+    }
+    if (badN) {
+      reportEl.appendChild(el('div', 'font-size:11px;color:#a40e26;margin:6px 0 2px',
+        '⚠️ 需人工（点一下直接跳到那一栏，并红框标出）'));
+      (st.failed || []).slice(0, 30).forEach(function (it) {
+        var row = el('div', 'display:flex;gap:6px;align-items:center;margin:3px 0;padding:3px 5px;' +
+          'border-radius:6px;background:#fff8f6;cursor:pointer;font-size:11px');
+        row.setAttribute('class', 'ihub-fail');
+        row.addEventListener('click', function () { locate(it.el); });
+        var t = el('span', 'flex:1;min-width:0;color:#a40e26;overflow:hidden;text-overflow:ellipsis;white-space:nowrap',
+          (it.keyLabel ? it.keyLabel + '：' : '') + it.reason);
+        var why = el('em', 'font-style:normal;font-size:10px;color:#8c959f;flex:0 0 auto',
+          String(it.label || '').slice(0, 12) || '（无标签）');
+        var cp = btn('📋', 'padding:1px 6px;font-size:11px;flex:0 0 auto', function (ev) {
+          try { ev.stopPropagation(); } catch (e) {}
+          var v = (it.key && P()[it.key]) || '';
+          copyText(v || String(it.label || ''));
+        });
+        row.appendChild(why); row.appendChild(t); row.appendChild(cp);
+        reportEl.appendChild(row);
+      });
+      if (st.failed.length > 30) {
+        reportEl.appendChild(el('div', 'font-size:11px;color:#8c959f',
+          '…还有 ' + (st.failed.length - 30) + ' 项，先处理上面这些。'));
+      }
+    }
+    if (st.fakeSelects) {
+      reportEl.appendChild(el('div', 'font-size:11px;color:#0969da;margin-top:4px',
+        '另有 ' + st.fakeSelects + ' 个自绘下拉已自动点开选择（等 1~2 秒看结果）。'));
+    }
+  }
+
+  /* ============ 🧠 字段学习：教一次，以后任何网站都认得 ============ */
+  function renderLearn() {
+    if (!learnEl) return;
+    learnEl.textContent = '';
+    var unk = [];
+    try { unk = scanUnknown(document); } catch (e) {}
+    var m = learnMap(), learnedN = Object.keys(m).length;
+    var head = el('div', 'display:flex;align-items:center;justify-content:space-between');
+    head.appendChild(el('b', 'font-size:12px', '🧠 字段学习（已记住 ' + learnedN + ' 个）'));
+    var bar = el('div', 'display:flex;gap:5px');
+    bar.appendChild(btn('🔄 重新扫描', 'padding:2px 7px;font-size:11px', function () { renderLearn(); }));
+    bar.appendChild(btn('📤 导出', 'padding:2px 7px;font-size:11px', function () {
+      copyText(JSON.stringify(learnMap(), null, 1));
+      if (statusEl) statusEl.textContent = '学习库已复制到剪贴板（换电脑时用「导入」粘回来）。';
+    }));
+    bar.appendChild(btn('📥 导入', 'padding:2px 7px;font-size:11px', function () {
+      var s = null;
+      try { s = window.prompt ? window.prompt('把导出的学习库 JSON 粘进来：') : null; } catch (e) {}
+      if (!s) return;
+      try {
+        var o = JSON.parse(s);
+        var cur = learnMap(), n = 0;
+        for (var k in o) { if (o[k] && o[k].k) { cur[k] = o[k]; n++; } }
+        learnSave(cur); renderLearn();
+        if (statusEl) statusEl.textContent = '已导入 ' + n + ' 条学习记录。';
+      } catch (e2) { if (statusEl) statusEl.textContent = '这段不是有效的 JSON，导入取消。'; }
+    }));
+    bar.appendChild(btn('🗑', 'padding:2px 7px;font-size:11px', function () {
+      learnSave({}); renderLearn();
+      if (statusEl) statusEl.textContent = '已清空学习库。';
+    }));
+    head.appendChild(bar);
+    learnEl.appendChild(head);
+
+    if (!unk.length) {
+      learnEl.appendChild(el('div', 'font-size:11px;color:#8c959f;margin:3px 0',
+        learnedN ? '这一页没有不认识的字段了 ✅' : '这一页的字段都认得（或都填好了）。'));
+      return;
+    }
+    learnEl.appendChild(el('div', 'font-size:11px;color:#57606a;margin:3px 0',
+      '下面 ' + unk.length + ' 栏没认出来 —— 选一下它是什么，点「记住」，下次全世界的网申页都会自己填：'));
+    unk.slice(0, 12).forEach(function (u) {
+      var row = el('div', 'display:flex;gap:5px;align-items:center;margin:3px 0');
+      var nm = el('div', 'flex:0 0 108px;font-size:11px;color:#1f2328;overflow:hidden;' +
+        'text-overflow:ellipsis;white-space:nowrap', String(u.label || '（无标签）').slice(0, 18));
+      var sel = el('select', 'flex:1;min-width:0;padding:2px 4px;border:1px solid #d0d7de;' +
+        'border-radius:5px;font-size:11px');
+      sel.setAttribute('data-ihub-panel', '1');
+      var none = document.createElement('option');
+      none.value = ''; none.textContent = '（这是什么？）';
+      sel.appendChild(none);
+      if (u.field) { var guess = document.createElement('option'); guess.value = u.field.k; guess.textContent = '像是：' + u.field.label; guess.selected = true; sel.appendChild(guess); }
+      FIELDS.forEach(function (f) {
+        var o = document.createElement('option');
+        o.value = f.k; o.textContent = f.label;
+        sel.appendChild(o);
+      });
+      var save = btn('记住', 'padding:2px 7px;font-size:11px;flex:0 0 auto', function () {
+        if (!sel.value) { if (statusEl) statusEl.textContent = '先在下拉里选一个字段类型。'; return; }
+        learnAdd(u.label, sel.value);
+        // 页面上已经手填过的值也一起记住，下次直接填
+        try {
+          var cur = isEditable(u.el) ? visText(u.el) : String(u.el.value || '');
+          if (cur && cur.trim()) setOverride(sel.value, cur.trim());
+        } catch (e) {}
+        var f2 = fieldByKey(sel.value);
+        try {
+          var v2 = P()[sel.value];
+          if (v2 && !hasValue(u.el)) {
+            if (u.el.tagName === 'SELECT') fillSelect(u.el, v2);
+            else if (isEditable(u.el)) { u.el.innerText = v2; fire(u.el); }
+            else setNative(u.el, adapt(u.el, v2));
+            mark(u.el, true);
+          }
+        } catch (e2) {}
+        if (statusEl) statusEl.textContent = '记住了：「' + String(u.label).slice(0, 16) + '」= ' +
+          (f2 ? f2.label : sel.value) + '。以后任何网站遇到这个叫法都会自动填。';
+        renderLearn(); refreshList();
+      });
+      var go2 = btn('定位', 'padding:2px 6px;font-size:11px;flex:0 0 auto', function () { locate(u.el); });
+      row.appendChild(nm); row.appendChild(sel); row.appendChild(save); row.appendChild(go2);
+      learnEl.appendChild(row);
+    });
+    if (unk.length > 12) {
+      learnEl.appendChild(el('div', 'font-size:11px;color:#8c959f',
+        '…还有 ' + (unk.length - 12) + ' 栏，先教这几个，剩下的再点「重新扫描」。'));
+    }
   }
 
   function doFill(mode) {
     var st = fillDoc(document, mode);
+    lastFailed = st.failed || [];
+    lastReport = st.report || [];
+    lastStats = st;
     broadcast(mode);
+    renderReport(st);
     if (statusEl) {
       statusEl.textContent = '已填 ' + st.filled + ' 个字段' +
         (st.fakeSelects ? '，另有 ' + st.fakeSelects + ' 个自绘下拉已自动点选（稍等片刻）' : '') +
@@ -747,6 +1327,7 @@ _TEMPLATE = r"""// ==UserScript==
           ? '：' + st.report.slice(0, 6).join('，') + (st.report.length > 6 ? ' …' : '')
           : '（没有匹配到可填字段）');
     }
+    renderLearn();
     setTimeout(function () {
       if (statusEl && st.filled === 0) {
         statusEl.textContent += '。若页面在 iframe 里，稍等 1~2 秒；也可以先点一下表单区域再点填入。';
@@ -755,25 +1336,36 @@ _TEMPLATE = r"""// ==UserScript==
   }
 
   function buildPanel() {
-    panel = el('div', 'position:fixed;right:16px;bottom:16px;z-index:2147483647;width:352px;max-height:76vh;' +
-      'overflow:auto;background:#fff;border:1px solid #d0d7de;border-radius:10px;' +
-      'box-shadow:0 8px 28px rgba(0,0,0,.2);font:13px/1.55 -apple-system,"Microsoft YaHei",sans-serif;color:#1f2328');
-    var head = el('div', 'display:flex;align-items:center;justify-content:space-between;padding:8px 10px;' +
-      'border-bottom:1px solid #eaeef2;background:#f6f8fa;border-radius:10px 10px 0 0');
-    head.appendChild(el('b', 'font-size:13px', '📝 网申助手 v4（ATS 兼容）'));
+    var mount = ensureHost();
+    if (!mount) return;
+    if (panel && mount.contains && mount.contains(panel)) { panel.style.display = 'block'; refreshList(); return; }
+    panel = el('div', 'position:fixed;right:16px;bottom:16px;z-index:2147483647;width:372px;max-height:80vh;' +
+      'overflow:auto;background:#fff;border:1px solid #d0d7de;border-radius:12px;' +
+      'box-shadow:0 10px 32px rgba(0,0,0,.22);font:13px/1.55 -apple-system,"Microsoft YaHei",sans-serif;color:#1f2328');
+    panel.setAttribute('class', 'ihub-p');
+    panel.setAttribute('data-ihub-panel', '1');
+    var head = el('div', 'display:flex;align-items:center;justify-content:space-between;padding:9px 11px;' +
+      'border-bottom:1px solid #eaeef2;background:#f6f8fa;border-radius:12px 12px 0 0');
+    head.appendChild(el('b', 'font-size:13px', '📝 网申助手 v5（70 类字段 · 会学习）'));
     var x = btn('收起', '', function () { panel.style.display = 'none'; if (fab) fab.style.display = 'block'; });
     head.appendChild(x);
     panel.appendChild(head);
 
-    var body = el('div', 'padding:9px 10px');
+    var body = el('div', 'padding:10px 11px');
     buildDirSelect(body);
 
     var bar = el('div', 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px');
-    bar.appendChild(btn('填入空字段', 'background:#1f6feb;color:#fff;border-color:#1f6feb', function () { doFill('empty'); }));
+    bar.appendChild(btn('🚀 填入空字段', 'background:#1f6feb;color:#fff;border-color:#1f6feb', function () { doFill('empty'); }));
     bar.appendChild(btn('覆盖全部', '', function () { doFill('overwrite'); }));
     bar.appendChild(btn('恢复内置', '', function () {
       clearOverrides(); refreshList();
       if (statusEl) statusEl.textContent = '已清空本机手动修改，回到内置资料。';
+    }));
+    bar.appendChild(btn('⤵ 用本方向值', '', function () {
+      var n = applyRoleDefaults();
+      refreshList();
+      if (statusEl) statusEl.textContent = '已把求职意向 / 期望薪资 / 到岗时间换成「' +
+        ((PACKS[getDir()] || {}).label || getDir()) + '」这一档（' + n + ' 项），可在下面资料区改回。';
     }));
     bar.appendChild(btn('📋 导出资料', '', function () {
       var s = JSON.stringify(P(), null, 2);
@@ -781,6 +1373,22 @@ _TEMPLATE = r"""// ==UserScript==
       if (statusEl) statusEl.textContent = '资料 JSON 已复制到剪贴板（可粘到投递工作台的「从 JSON 导入」）。';
     }));
     body.appendChild(bar);
+
+    statusEl = el('div', 'color:#57606a;font-size:12px;margin:6px 0 6px',
+      '先选「岗位方向」，再点「🚀 填入空字段」。填完会出报告：哪些填好了、哪些要你处理。');
+    body.appendChild(statusEl);
+
+    // 📊 填充报告区（填完才有内容）
+    var secR = el('div', 'margin-top:9px;border-top:1px solid #eaeef2;padding-top:8px');
+    reportEl = el('div');
+    secR.appendChild(reportEl);
+    body.appendChild(secR);
+
+    // 🧠 字段学习区
+    var secL = el('div', 'margin-top:9px;border-top:1px solid #eaeef2;padding-top:8px');
+    learnEl = el('div');
+    secL.appendChild(learnEl);
+    body.appendChild(secL);
 
     // ---- 📮 投递登记：填完/投完当场记一笔，回 InternHub 粘贴入库 ----
     var lg = el('div', 'border-top:1px solid #eaeef2;margin-top:8px;padding-top:8px');
@@ -851,35 +1459,64 @@ _TEMPLATE = r"""// ==UserScript==
       '入库时 InternHub 会自动拦你。'));
     body.appendChild(lg);
 
-    statusEl = el('div', 'color:#57606a;font-size:12px;margin:6px 0 6px',
-      '先选「岗位方向」，再点「填入空字段」。带 * 的是你在这里改过的值。');
-    body.appendChild(statusEl);
+    // 📝 资料区（70 个字段分组展示 + 搜索）
+    var secP = el('div', 'margin-top:9px;border-top:1px solid #eaeef2;padding-top:8px');
+    var ph = el('div', 'display:flex;gap:6px;align-items:center;margin-bottom:4px');
+    ph.appendChild(el('b', 'font-size:12px;flex:0 0 auto', '📝 我的资料'));
+    filterEl = el('input', 'flex:1;min-width:0;padding:3px 7px;border:1px solid #d0d7de;' +
+      'border-radius:6px;font-size:12px');
+    filterEl.setAttribute('data-ihub-panel', '1');
+    filterEl.placeholder = '搜字段（如 身高 / 期望薪资）';
+    filterEl.addEventListener('input', function () { refreshList(); });
+    ph.appendChild(filterEl);
+    secP.appendChild(ph);
 
+    // 「只看缺的」：填充率上不去的唯一原因就是资料有空 —— 这里一次补齐，以后全是 100%
+    var missBar = el('div', 'display:flex;gap:6px;align-items:center;margin-bottom:4px');
+    var missBtn = btn('', 'padding:3px 8px;font-size:11px;flex:0 0 auto', function () {
+      onlyMissing = !onlyMissing;
+      refreshList();
+    });
+    missBar.appendChild(missBtn);
+    missBar.appendChild(el('div', 'flex:1;font-size:11px;color:#8c959f',
+      '资料有空就填不满 —— 补一次，以后每份网申都是 100%'));
+    secP.appendChild(missBar);
+    missBtnEl = missBtn;
     listEl = el('div');
-    body.appendChild(listEl);
+    secP.appendChild(listEl);
+    body.appendChild(secP);
+
     body.appendChild(el('div', 'color:#8c959f;font-size:11px;margin-top:6px',
       '只在你本人点击时填表，不联网、不提交、不绕过验证码。定稿前请逐个核对。'));
     panel.appendChild(body);
-    document.body.appendChild(panel);
+    mount.appendChild(panel);
     refreshList();
+    renderLearn();
   }
 
   var fab = null;
   function buildFab() {
-    fab = el('div', 'position:fixed;right:16px;bottom:16px;z-index:2147483647;padding:9px 12px;background:#1f6feb;' +
-      'color:#fff;border-radius:22px;cursor:pointer;font:13px -apple-system,"Microsoft YaHei",sans-serif;' +
-      'box-shadow:0 4px 14px rgba(0,0,0,.25);user-select:none', '📝 网申助手');
+    var mount = ensureHost();
+    if (!mount) return;
+    if (fab && mount.contains(fab)) return;
+    fab = el('div', 'position:fixed;right:16px;bottom:16px;z-index:2147483647;padding:10px 14px;' +
+      'background:#1f6feb;color:#fff;border-radius:24px;cursor:pointer;' +
+      'font:13px -apple-system,"Microsoft YaHei",sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.28);user-select:none',
+      '📝 网申助手 v5');
+    fab.setAttribute('class', 'ihub-fab');
+    fab.setAttribute('data-ihub-panel', '1');
     fab.addEventListener('click', function () {
-      if (!panel) buildPanel();
-      panel.style.display = 'block';
+      buildPanel();
+      if (panel) panel.style.display = 'block';
       fab.style.display = 'none';
-      refreshList();
     });
-    document.body.appendChild(fab);
+    mount.appendChild(fab);
   }
 
   function ensureMounted() {
-    if (document.body && (!fab || !document.body.contains(fab))) buildFab();
+    if (!document.body) return;
+    var ok = hostEl && document.body.contains(hostEl);
+    if (!ok || !fab || (mountEl && mountEl.contains && !mountEl.contains(fab))) buildFab();
   }
 
   if (isTop) {
@@ -894,6 +1531,12 @@ _TEMPLATE = r"""// ==UserScript==
     getOverrides: readOverrides, overrides: readOverrides, clearOverrides: clearOverrides,
     getDir: getDir, setDir: setDir, PACKS: PACKS, groupLabel: groupLabel,
     isVisible: isVisible, buildPanel: buildPanel,
+    // v5：多档数据 / 填充报告 / 字段学习
+    ROLE_VALS: ROLE_VALS, GROUPS: GROUPS, contextLabel: contextLabel,
+    applyRoleDefaults: applyRoleDefaults, roleHint: roleHint,
+    learnMap: learnMap, learnAdd: learnAdd, learnDel: learnDel, learnLookup: learnLookup,
+    LEARN_KEY: LEARN_KEY, scanUnknown: scanUnknown, locate: locate,
+    renderReport: renderReport, renderLearn: renderLearn, fieldByKey: fieldByKey,
     // 投递台账（第 3 步重构）：本机暂存 + 导出 TSV，回 InternHub 粘贴入库
     readLedger: readLedger, writeLedger: writeLedger, ledgerTsv: ledgerTsv,
     guessCompany: guessCompany, LEDGER_KEY: LEDGER_KEY, STAGES: STAGES,
@@ -915,6 +1558,9 @@ def build_js(prof=None) -> str:
                     data[k] = v
         except Exception:
             pass
+    for _k, _v in EXTRA_DEFAULTS.items():
+        if not data.get(_k):
+            data[_k] = _v
     payload = json.dumps(data, ensure_ascii=False, indent=2)
     pks = json.dumps(_packs(), ensure_ascii=False, indent=2)
     return _TEMPLATE.replace("__PAYLOAD__", payload).replace("__PACKS__", pks)

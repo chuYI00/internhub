@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>国企自研网申模拟页（InternHub 网申助手自检用）</title>
+<style>
+  body { font: 14px/1.8 "Microsoft YaHei", sans-serif; margin: 0; background: #eef1f5; color: #1f2328; }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 24px 24px 160px; }
+  h1 { font-size: 20px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; }
+  td { border: 1px solid #d6dbe0; padding: 7px 10px; }
+  td.k { width: 170px; background: #fafbfc; color: #333; text-align: right; }
+  input, textarea { width: 96%; padding: 5px 8px; border: 1px solid #c9d0d6; border-radius: 4px; font: inherit; }
+  textarea { height: 56px; }
+  input[readonly] { background: #f2f4f6; color: #666; }
+  .combo { position: relative; width: 300px; }
+  .combo .box { border: 1px solid #c9d0d6; border-radius: 4px; padding: 5px 8px; cursor: pointer; background: #fff; }
+  .combo .list { position: absolute; z-index: 99; background: #fff; border: 1px solid #c9d0d6; width: 100%; }
+  .combo .list div { padding: 5px 9px; cursor: pointer; }
+  .combo .list div:hover { background: #eef4ff; }
+  .ce { border: 1px solid #c9d0d6; border-radius: 4px; min-height: 54px; padding: 5px 8px; background: #fff; }
+  .card { background: #fff; border-radius: 6px; padding: 6px; margin-bottom: 16px; }
+  .tip { background: #fffbe6; border: 1px solid #ffe58f; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
+  fieldset { border: 1px solid #d6dbe0; margin: 0 0 14px; padding: 10px 14px; background: #fff; }
+  legend { font-weight: 600; color: #0b5cab; padding: 0 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>国企自研网申模拟页（老式表格 + 自绘下拉 + 只读框 + 富文本）</h1>
+  <div class="tip">
+    这一类最难搞：<b>老式 &lt;table&gt; 布局</b>、<b>自绘下拉</b>（div 假装的）、
+    <b>只读框</b>（填不进去，只能复制）、<b>富文本</b>（contenteditable）。
+    填完点「算一下填充率」，看报告里「需人工」那几项是不是这几种。
+  </div>
+  <div class="card"><table id="tbl"></table></div>
+  <button onclick="score()" style="padding:8px 16px">算一下填充率</button>
+  <pre id="out" style="background:#fff;padding:12px;border-radius:8px"></pre>
+</div>
+<script>
+/* [题目, 类型, 参数] —— combo 是自绘下拉，ro 是只读框，ce 是富文本，check 是复选框 */
+var ROWS = [
+  ['姓名','text'], ['性别','combo',['男','女']], ['出生日期','text'],
+  ['政治面貌','combo',['中共党员','中共预备党员','共青团员','群众']],
+  ['民族','text'], ['身份证号','text'],
+  ['手机号码','text'], ['电子邮箱','text'], ['微信号','text'], ['QQ号码','text'],
+  ['毕业院校','ro','中国民航大学'], ['所在学院','ro','电子信息与自动化学院'],
+  ['所学专业','text'], ['专业类别','text'],
+  ['最高学历','combo',['大专','本科','硕士研究生']], ['学位','combo',['学士','硕士','博士']],
+  ['学制','text'], ['培养方式','text'], ['入学时间','text'], ['毕业时间','text'],
+  ['GPA','text'], ['专业排名','text'],
+  ['现居住地','text'], ['籍贯','combo',['北京市','云南省','四川省']],
+  ['高考省份','text'], ['户口性质','combo',['农业户口','非农业户口']],
+  ['通讯地址','text'], ['邮政编码','text'],
+  ['外语水平','text'], ['英语四级成绩','text'], ['计算机等级','text'], ['普通话水平','text'],
+  ['身高（cm）','text'], ['体重（kg）','text'], ['健康状况','text'],
+  ['奖惩情况','textarea'], ['家庭主要成员','textarea'],
+  ['婚姻状况','combo',['未婚','已婚']],
+  ['紧急联系人','text'], ['紧急联系人电话','text'], ['与本人关系','text'], ['紧急联系人地址','text'],
+  ['求职意向','text'], ['期望工作城市','text'], ['期望薪资','text'], ['到岗时间','text'],
+  ['第一志愿','text'], ['信息来源','text'], ['兴趣爱好','text'], ['学生干部','text'],
+  ['社会实践','textarea'], ['专业技能','textarea'], ['个人亮点','textarea'],
+  ['项目经历','textarea'], ['自我评价','ce'], ['获得证书','textarea'], ['奖学金/荣誉','textarea'],
+  ['是否有亲属在本单位工作','combo',['是','否']]
+];
+
+var tbl = document.getElementById('tbl');
+ROWS.forEach(function (f, i) {
+  var tr = document.createElement('tr');
+  var td1 = document.createElement('td');
+  td1.className = 'k';
+  td1.textContent = f[0];
+  var td2 = document.createElement('td');
+  var id = 'r' + i;
+
+  if (f[1] === 'combo') {
+    var c = document.createElement('div');
+    c.className = 'combo';
+    c.innerHTML = '<div class="box" role="combobox"><span class="v">请选择</span></div>';
+    c.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (c._open) return;
+      c._open = true;
+      var lst = document.createElement('div');
+      lst.className = 'list';
+      f[2].forEach(function (t) {
+        var o = document.createElement('div');
+        o.setAttribute('role', 'option');
+        o.textContent = t;
+        o.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          c.querySelector('.v').textContent = t; c._val = t; lst.remove(); c._open = false;
+        });
+        lst.appendChild(o);
+      });
+      c.appendChild(lst);
+    });
+    td2.appendChild(c);
+  } else if (f[1] === 'ro') {
+    var ro = document.createElement('input');
+    ro.id = id; ro.readOnly = true; ro.value = f[2] || '';
+    td2.appendChild(ro);
+  } else if (f[1] === 'ce') {
+    var ce = document.createElement('div');
+    ce.id = id;
+    ce.className = 'ce';
+    ce.setAttribute('contenteditable', 'true');
+    td2.appendChild(ce);
+  } else {
+    var el = document.createElement(f[1] === 'textarea' ? 'textarea' : 'input');
+    el.id = id;
+    if (f[1] !== 'textarea') el.type = 'text';
+    td2.appendChild(el);
+  }
+  tr.appendChild(td1); tr.appendChild(td2); tbl.appendChild(tr);
+});
+
+/* 一个「三个裸输入框在同一个分组里」的角落 —— 考的是上下文推断 */
+var fs = document.createElement('fieldset');
+var lg = document.createElement('legend');
+lg.textContent = '政治面貌';
+fs.appendChild(lg);
+['a', 'b', 'c'].forEach(function (suffix) {
+  var inp = document.createElement('input');
+  inp.id = 'ctx' + suffix;
+  fs.appendChild(inp);
+});
+tbl.parentNode.appendChild(fs);
+
+function score() {
+  var total = 0, done = 0, miss = [];
+  ROWS.forEach(function (f, i) {
+    var box = tbl.querySelectorAll('tr')[i].querySelectorAll('td')[1];
+    var combo = box.querySelector('.combo');
+    total++;
+    if (f[1] === 'combo') {
+      if (combo && combo._val) done++; else miss.push(f[0] + '（自绘下拉）');
+    } else if (f[1] === 'ro') {
+      done++;      /* 只读框本来就预置了值，不算漏 */
+    } else {
+      var el = document.getElementById('r' + i);
+      var v = el.getAttribute('contenteditable') === 'true' ? el.innerText : el.value;
+      if (String(v || '').trim()) done++; else miss.push(f[0]);
+    }
+  });
+  var pct = Math.round(done / total * 100);
+  document.getElementById('out').textContent =
+    '填充率：' + done + '/' + total + ' = ' + pct + '%\n\n' +
+    (miss.length ? '还没填上的（' + miss.length + '）：\n' + miss.join('、') : '全部填上了 ✅');
+  window.__fillScore = { total: total, done: done, pct: pct, miss: miss };
+}
+</script>
+</body>
+</html>
