@@ -76,6 +76,7 @@ main{padding:12px 12px 24px;max-width:640px;margin:0 auto}
   background:var(--acc2);color:var(--acc);margin-left:auto;flex:0 0 auto
 }
 .card[open]>summary .tag{display:none}
+.card[open]>summary .chips{display:none}
 .card>summary .done{font-size:13px;flex:0 0 auto}
 .body{padding:0 14px 14px;font-size:14px;color:var(--tx2)}
 .body p{margin:8px 0}
@@ -91,6 +92,50 @@ main{padding:12px 12px 24px;max-width:640px;margin:0 auto}
 .k{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:7px 0;font-size:13.5px;color:var(--tx)}
 .k b{color:var(--acc)}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+
+/* ---------- 分层标签 🔴🟡🔵 ---------- */
+.lv{font-size:10px;padding:1px 5px;border-radius:4px;font-weight:700;letter-spacing:0;margin-right:5px;white-space:nowrap}
+.lv-c{color:#ff7373;background:rgba(255,115,115,.15)}
+.lv-y{color:#ffc247;background:rgba(255,194,71,.15)}
+.lv-b{color:#79bdff;background:rgba(121,189,255,.15)}
+html[data-theme="light"] .lv-c{color:#c62828;background:rgba(198,40,40,.10)}
+html[data-theme="light"] .lv-y{color:#a35c00;background:rgba(163,92,0,.10)}
+html[data-theme="light"] .lv-b{color:#1e6fd9;background:rgba(30,111,217,.10)}
+.chips{font-size:10.5px;color:var(--tx3);flex:0 0 auto;letter-spacing:.3px}
+
+/* 拓展选学折叠块 */
+.ext{margin-top:10px;border:1px dashed var(--line);border-radius:10px;background:var(--bg2)}
+.ext>summary{padding:9px 11px;font-size:12.5px;color:var(--tx3);cursor:pointer;list-style:none;user-select:none}
+.ext>summary::-webkit-details-marker{display:none}
+.ext[open]>summary{color:var(--tx2)}
+.ext .body{padding:0 12px 10px;font-size:13px}
+
+/* 模式切换 */
+.seg{display:flex;gap:6px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:10px}
+.seg button{flex:1;border:0;background:none;color:var(--tx2);font-size:12.5px;padding:8px 6px;border-radius:9px;cursor:pointer;line-height:1.35}
+.seg button.on{background:var(--acc);color:#fff;font-weight:600}
+.seg button small{display:block;font-size:10px;opacity:.85;font-weight:400;margin-top:2px}
+
+/* 微课指引行 */
+.mc{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:8px}
+.mc.done{opacity:.6}
+.mc-h{font-size:14.5px;font-weight:600;color:var(--tx);display:flex;gap:7px;align-items:flex-start}
+.mc-h .no{font-size:11px;color:var(--tx3);flex:0 0 auto;padding-top:3px}
+.mc-h .cx{flex:1}
+.mcbox{width:20px;height:20px;flex:0 0 auto;border:2px solid var(--tx3);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;color:transparent}
+.mc.done .mcbox{background:var(--ok);border-color:var(--ok);color:#fff}
+.mc-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center}
+.mc-k{font-size:11.5px;color:var(--tx3);background:var(--bg2);border:1px solid var(--line);border-radius:7px;padding:3px 7px}
+.mc-g{font-size:13px;color:var(--tx2);margin-top:7px;line-height:1.6}
+.mc-g b{color:var(--tx)}
+.copy{margin-left:auto;flex:0 0 auto;font-size:11.5px;color:var(--acc);background:var(--acc2);border:1px solid var(--line);border-radius:7px;padding:3px 9px;cursor:pointer}
+
+/* 个人刷题总结 */
+.mynote{margin-top:10px;border-top:1px dashed var(--line);padding-top:9px}
+.mytitle{font-size:12px;color:var(--acc);font-weight:700;margin-bottom:3px}
+.note{width:100%;min-height:62px;margin-top:2px;padding:9px 10px;border-radius:9px;border:1px dashed var(--line);background:var(--card2);color:var(--tx);font:14px/1.6 -apple-system,"PingFang SC",sans-serif;resize:vertical}
+.note::placeholder{color:var(--tx3)}
+.notehint{font-size:11px;color:var(--tx3);margin-top:4px}
 
 /* 今日任务勾选 */
 .task{display:flex;align-items:flex-start;gap:11px;padding:13px 14px;cursor:pointer}
@@ -153,6 +198,7 @@ nav button.on{color:var(--acc)}
 
 <main>
   <div class="page on" id="p-today"></div>
+  <div class="page" id="p-course"></div>
   <div class="page" id="p-mem"></div>
   <div class="page" id="p-quiz"></div>
   <div class="page" id="p-major"></div>
@@ -163,6 +209,7 @@ nav button.on{color:var(--acc)}
 
 <nav>
   <button data-p="today" class="on"><i>🗓</i>今日</button>
+  <button data-p="course"><i>🎬</i>微课</button>
   <button data-p="mem"><i>🧠</i>必背</button>
   <button data-p="quiz"><i>✏️</i>刷题</button>
   <button data-p="major"><i>🔧</i>专业</button>
@@ -203,95 +250,275 @@ var TASKS = {
 
 /* ============ 必背卡 ============ */
 var MEM = [
-{ t:"资料分析 · 必背公式", tag:"行测", items:[
-  "基期量 = 现期 ÷ (1 + 增长率)",
-  "增长量 = 现期 − 基期 = 现期 × 增长率 ÷ (1 + 增长率)",
-  "增长率 = 增长量 ÷ 基期 = 现期 ÷ 基期 − 1",
-  "比重 = 部分 ÷ 整体",
-  "比重升降：部分增速 > 整体增速 → 比重<b>上升</b>",
-  "平均数增长率 = (1+总量增速) ÷ (1+份数增速) − 1",
-  "A 是 B 的几倍 = A÷B；A 比 B <b>多</b>几倍 = A÷B − 1",
-  "年均增长率 ≈ (末期÷基期 − 1) ÷ n",
-  "混合增长率：介于两部分之间，更靠近<b>基数大</b>的那部分"
+{ id:"zl", t:"资料分析 · 六大概念与核心公式", tag:"行测", items:[
+  ["c","<b>增长率</b> = 增长量 ÷ 基期 = 现期÷基期 − 1（「增幅、增速、增长 %」都是它，结果带 <b>%</b>）"],
+  ["c","<b>增长量</b> = 现期 − 基期 = 现期 × r ÷ (1+r)（结果<b>带单位</b>：万吨、亿元）"],
+  ["c","读题先判断求「率」还是求「量」：<b>问增长了多少→量</b>，<b>问增长百分之几→率</b>，这是最常套错的坑"],
+  ["c","<b>基期量</b> = 现期 ÷ (1+r)；<b>|r| ≤ 5% 时用「化除为乘」</b>：基期 ≈ 现期 × (1−r)"],
+  ["c","<b>现期量</b> = 基期 × (1+r)，隔 n 年 = 基期 × (1+r)ⁿ"],
+  ["c","<b>比重</b> = 部分 ÷ 整体；反过来：<b>部分 = 整体×比重，整体 = 部分÷比重</b>"],
+  ["c","<b>基期比重</b> = A/B × <b>(1+b)÷(1+a)</b>（A=部分现期、a=部分增速；B=整体现期、b=整体增速）"],
+  ["c","<b>两期比重差</b> = A/B × (a−b)÷(1+a)；<b>判升降只看 a 与 b 谁大</b>（部分增速 &gt; 整体增速 → 比重<b>上升</b>）"],
+  ["c","<b>平均数</b> = 总量 ÷ 份数；<b>平均数增长率</b> = (1+总量增速) ÷ (1+份数增速) − 1"],
+  ["c","A 是 B 的几倍 = A÷B；A 比 B <b>多</b>几倍 = A÷B − 1"],
+  ["c","<b>百分点 vs 百分数</b>：两个百分数相减用「<b class=\"red\">百分点</b>」（增速高 3 个百分点），不是 3%"],
+  ["c","<b>混合增长率</b>：整体增速<b>介于两部分之间</b>，且更靠近<b>基数大</b>的那部分（定性判断即可）"],
+  ["c","<b>年均增长率 ≈ (末期÷基期 − 1) ÷ n</b>（估算够用；精确值只比估算值略小，选项接近时选略小的）"],
+  ["y","拉动增长率 = 部分增长量 ÷ 整体基期；增长贡献率 = 部分增长量 ÷ 整体增长量"],
+  ["y","同比 = 与上年同期比；环比 = 与上一个统计周期比（环比<b>不是</b>同比的简称）"],
+  ["y","发展速度 = 现期÷基期；增长速度 = 发展速度 − 1（增长速度就是增长率）"],
+  ["y","翻 n 番 = 2ⁿ 倍；成数：三成 = 30%"]
+], ext:[
+  "年均增长率的<b>精确开方</b>解（如需用二分/代入排除代替，不必手算开方）",
+  "隔年倍数、隔年基期的<b>多重嵌套</b>（先把隔年增长率算出来再套，不建议练）",
+  "混合增长率的<b>十字交叉精确解方程</b>结果（用「偏向基数大的一侧」定性判断即可得分）",
+  "三个及以上主体的多重混合持股比例题（烟草基本不考，直接跳过）"
 ]},
-{ t:"速算三招 + 特征数字", tag:"行测", items:[
-  "<b>截位直除</b>：分母只截 3~4 位，够选答案就行",
-  "<b>特征数字法</b>（背下来）：1/7≈14.3%、1/9≈11.1%、1/11≈9.1%、1/12≈8.3%、1/13≈7.7%、1/14≈7.1%、1/15≈6.7%、1/16=6.25%",
-  "<b>同位比较法</b>：两个分数比大小，先看量级再看首位",
-  "固定动作：看问题 → 定位数据 → 列式 → 截位直除 → 选最接近项"
+{ id:"suan", t:"资料分析 · 三大速算（提分命根子）", tag:"行测", items:[
+  ["c","<b>截位直除</b>：一步除法只截<b>分母</b>（选项差距大截 3 位、差距小截 4 位），够选答案就行"],
+  ["c","<b>特征数字法</b>（百化分，背到脱口而出）：1/7≈14.3%、1/9≈11.1%、1/11≈9.1%、1/12≈8.3%、1/13≈7.7%、1/14≈7.1%、1/15≈6.7%、1/16=6.25%、1/6≈16.7%、1/8=12.5%"],
+  ["c","常用互化：50%=1/2、25%=1/4、<b>1/20=5%</b>、33%≈1/3、66%≈2/3、75%=3/4"],
+  ["c","<b>同位比较法</b>：两个分数比大小——<b>分母挨得近就看分子，分子挨得近就看分母</b>，先看量级再看首位"],
+  ["c","<b>差分法</b>：两分数同向变化时，用「分子差/分母差」的新分数与小的比，再判断谁大"],
+  ["c","<b>放缩估算</b>：把 998 当 1000、把 10.2% 当 10%，<b>误差 &lt;5% 不影响选答案</b>"],
+  ["c","<b>固定动作四步</b>：看问题（求啥）→ 定位数据（别找错行）→ 列式 → 截位估算 → 选<b>最接近</b>的一项"],
+  ["y","首数法：选项首位不同，算出第一位就能选，不要再往下算"]
+], ext:[
+  "繁琐的错位相减、分数裂项求和（估算足以覆盖，练它性价比极低）",
+  "需要手算开平方的真平均数/综合变形题"
 ]},
-{ t:"图形推理 · 高频 5 类", tag:"行测", items:[
-  "<b>对称性</b>：轴对称 / 中心对称 / 对称轴数量与方向",
-  "<b>数量关系</b>：面、线、交点、笔画数（一笔画看奇点个数 0 或 2）",
-  "<b>位置规律</b>：平移、旋转、翻转",
-  "<b>样式规律</b>：遍历、叠加、去同存异 / 去异存同",
-  "<b>立体图形</b>：相对面不相邻、相邻面不相对",
-  "⚠️ <b>40 秒没思路立刻跳过</b>，图推不能恋战"
+{ id:"tui", t:"图形推理 · 高频规律", tag:"行测", items:[
+  ["c","<b>做题顺序</b>：先看<b>元素是否相同</b>——相同→优先想位置/遍历；不同→想属性/数量。<span class=\"red\">40 秒没思路立刻跳过</span>"],
+  ["c","<b>位置类</b>：平移（步数/方向/路径、越界循环）、旋转（顺时针/逆时针+角度）、翻转（上下/左右）"],
+  ["c","<b>样式类</b>：遍历（缺啥补啥）、叠加、<b>去同存异 / 去异存同</b>"],
+  ["c","<b>属性类</b>：<b>对称性</b>（轴对称/中心对称、对称轴的数量与方向）、开闭性（全开/全闭/半开半闭）、曲直性"],
+  ["c","<b>数量类</b>：点（交点/切点/十字点）、线（直线数、曲线数）、<b>面</b>、角、<b>素</b>（种类数与个数）"],
+  ["c","<b>一笔画</b>：连通图 + <b>奇点数 0 或 2</b> 才是一笔画；多笔画数 = 奇点数 ÷ 2"],
+  ["c","<b>空间重构（六面体）</b>：<b>相对面不相邻</b>（相间排列、隔一个的就是对面）、相邻面相对位置不变；<b>橡皮法/箭头法</b>最快"],
+  ["y","汉字类常考：笔画数、面数、结构（左右/上下/包围）、部分数"],
+  ["y","元素换算类：如图中 ★ = 2☆，先换算成同一单位再数"]
+], ext:[
+  "多面体（四面体/八面体）折叠、三视图与剖面图等冷门变体",
+  "「功能元素 + 相对位置」的复合刁钻规律",
+  "立体拼合 / 立体截面类偏题"
 ]},
-{ t:"逻辑判断 · 背公式就得分", tag:"行测", items:[
-  "「如果 A 则 B」→ <b>A ⇒ B</b>（肯前必肯后、否后必否前）",
-  "「只有 A 才 B」→ <b>B ⇒ A</b>",
-  "「除非 A 否则 B」→ <b>¬A ⇒ B</b>",
-  "矛盾关系：A ↔ ¬A；「所有是」↔「有些非」",
-  "加强/削弱力度：<b>搭桥/拆桥 > 举例 > 数据</b>",
-  "定义判断抓四要素：<b>主体 + 行为 + 对象 + 条件</b>",
-  "类比推理：先定内部关系（并列/包含/对应/语义），再看词性、感情色彩"
+{ id:"luo", t:"逻辑判断 · 背公式就得分", tag:"行测", items:[
+  ["c","「如果 A 那么 B」→ <b>A ⇒ B</b>；「只有 A 才 B」→ <b>B ⇒ A</b>；「除非 A 否则 B」→ <b>¬A ⇒ B</b>"],
+  ["c","<b>逆否命题</b>：A⇒B ⇔ ¬B⇒¬A。<b>肯前必肯后、否后必否前；否前、肯后都推不出</b>（最爱挖坑处）"],
+  ["c","<b>德·摩根定律</b>：¬(A 且 B) = ¬A 或 ¬B；¬(A 或 B) = ¬A 且 ¬B（「不都」「都不」一定要分清）"],
+  ["c","<b>真假推理三步</b>：先找<b>矛盾关系</b>（A 与 ¬A、所有是与有些非）→ 绕开矛盾看其他命题 → 回过头验证"],
+  ["c","反对关系：「所有是 / 所有非」<b>必有一假</b>；「有些是 / 有些非」<b>必有一真</b>"],
+  ["c","削弱力度大致排序：<b>削弱论点 &gt; 否论据/拆桥 &gt; 他因削弱</b>；加强：<b>搭桥 &gt; 补充论据 &gt; 举例</b>"],
+  ["c","常见削弱套路：<b>因果倒置、另有他因、样本不典型、数据不可比、措施不可行</b>"],
+  ["c","前提/假设型：优先找<b>搭桥</b>——把论据和论点之间的缺口连起来的那句话"],
+  ["c","日常推理：正确项往往是原文的<b>同义转述</b>，选项里出现新概念、程度过强的基本都错"],
+  ["y","集合推理：「有的 S 是 P」⇔「有的 P 是 S」；「所有 S 都是 P」<b>不能</b>推出「所有 P 都是 S」"],
+  ["y","原因解释型：选能<b>同时兼容矛盾双方</b>的选项"]
+], ext:[
+  "需画大型表格的多条件复合组合排列（耗时且烟草极少考）",
+  "复杂层出不穷的复合命题嵌套演绎（超过三个联言/选言的）"
 ]},
-{ t:"言语理解 · 高频成语", tag:"行测", items:[
-  "中心句常在这些位置：<b>首尾句、转折之后、递进之后、结论词之后</b>（因此/可见/总之）",
-  "逻辑填空两步：先看<b>语境</b>（并列/转折/递进/解释），再辨<b>词义侧重、搭配对象、感情色彩</b>",
-  "必背成语：相辅相成、层出不穷、潜移默化、不谋而合、推陈出新、独树一帜、不可或缺、至关重要、因地制宜、循序渐进"
+{ id:"dingyi", t:"定义判断 & 类比推理 · 提分包", tag:"行测", items:[
+  ["c","定义判断抓关键词：<b>主体 / 行为 / 对象 / 目的 / 条件 / 结果</b>，读定义时只圈这几处"],
+  ["c","定义判断正确项必须<b>全部符合</b>关键词，只要有一处不符就是排除项（先看排除再看选）"],
+  ["c","类比推理两步法：<b>先定横向关系</b>（全同/并列/包含/交叉/对应/加工/功能/属性）→ <b>再看纵向</b>（词性、感情色彩、学科领域是否一致）"],
+  ["c","类比常考：<b>组成–整体</b>（轮胎 vs 汽车）与<b>种属</b>（汽车 vs 交通工具）要分清；<b>必要条件</b>（启动 vs 电源）"],
+  ["c","类比出现「先后顺序」时还要看<b>主体是否相同</b>、「目的 vs 手段」、「必然 vs 或然」"],
+  ["y","定义遇到多要素题：把选项逐条打勾比对，别凭语感"],
+  ["y","类比如果横向关系有两个都说得通，用<b>纵向二次辨析</b>（如都是成语、都是职业）"]
+], ext:[
+  "类比中的冷门成语/古汉语典故释义（投入产出比低，靠平时积累）"
 ]},
-{ t:"云南省情（高频送分）", tag:"公基", items:[
-  "面积 <b>39.4 万 km²</b>，常住人口约 <b>4700 万</b>，下辖 <b>16 个州市</b>，省会昆明",
-  "与 <b>缅甸、老挝、越南</b> 接壤，陆地边境线约 4000 多 km，25 个边境县（市）",
-  "三个定位：<b>民族团结进步示范区、生态文明建设排头兵、面向南亚东南亚辐射中心</b>",
-  "发展提法：资源经济、园区经济、口岸经济；<b>「3815」战略发展目标</b>",
-  "支柱产业：烟草、旅游、电力（绿色能源）、有色金属、生物资源；<b>中老铁路</b>",
-  "<b>云南是全国最大烤烟产区</b>，「两烟」（烤烟、卷烟）产量长期居全国首位"
+{ id:"yanyu", t:"言语理解 · 高频成语与套路", tag:"行测", items:[
+  ["c","<b>中心句</b>常在这些位置：<b>首尾句、转折之后、递进之后、结论词之后</b>（因此 / 可见 / 总之 / 换言之）"],
+  ["c","行文脉络先分四类：<b>总分、分总、转折、并列</b>；并列文段要<b>概括两方面</b>，不能只说一半"],
+  ["c","逻辑填空两步：先看<b>语境</b>（并列 / 转折 / 递进 / 解释统一），再辨<b>词义侧重、搭配对象、感情色彩、程度轻重</b>"],
+  ["c","必背高频成语：相辅相成、层出不穷、潜移默化、不谋而合、推陈出新、独树一帜、不可或缺、至关重要、因地制宜、循序渐进"],
+  ["c","第二组成语：根深蒂固、<b>水到渠成</b>、<b>本末倒置</b>、<b>事半功倍</b>、<b>相得益彰</b>、<b>一蹴而就</b>、<b>良莠不齐</b>、<b>蔚然成风</b>、<b>刻不容缓</b>、<b>任重道远</b>"],
+  ["c","易混辨析①：<b>一蹴而就</b>（一步成功，多用于否定）vs <b>一挥而就</b>（写字画画快）"],
+  ["c","易混辨析②：<b>推陈出新</b>（去掉旧的、创造新的）vs <b>革故鼎新</b>（破除旧的、建立新的，多指制度）"],
+  ["c","易混辨析③：<b>层出不穷</b>（接连出现，中性偏褒）vs <b>屡见不鲜</b>（常见，不稀奇）"],
+  ["c","易混辨析④：<b>不可或缺 / 至关重要 / 举足轻重</b>（地位重要）vs <b>相辅相成</b>（互相配合缺一不可）"],
+  ["c","<b>语句排序</b>先看首句：<b>含指代词的句子不能做首句</b>（这/那/他/它），先找指代对象的那句在前"],
+  ["y","病句高频：搭配不当、成分残缺（缺主语）、句式杂糅、语序不当、重复赘余、不合逻辑"],
+  ["y","词语辨析优先看<b>搭配对象</b>（如「坚定信念」不能说「坚强信念」）"]
+], ext:[
+  "生僻成语词典式背诵（不考的生僻词，遇到再查）",
+  "长篇文言文 / 文学常识类篇章阅读（行测不考）"
 ]},
-{ t:"烟草行业常识（必考）", tag:"公基", items:[
-  "管理体制：<b>统一领导、垂直管理、专卖专营</b>",
-  "国家烟草专卖局与中国烟草总公司 <b>一套机构、两块牌子</b>",
-  "《烟草专卖法》<b>1992 年 1 月 1 日</b>施行（1991 年通过）",
-  "许可证制度：生产、批发、零售、运输均需许可；运输需<b>准运证</b>",
-  "烟草专卖品范围：卷烟、雪茄烟、烟丝、复烤烟叶、烟叶、<b>卷烟纸、滤嘴棒、烟用丝束、烟草专用机械</b>",
-  "包装必须标<b>焦油量、烟碱量</b>及「吸烟有害健康」；禁止在广播电台、电视台播烟草广告；禁止向未成年人售烟",
-  "<b>电子烟已纳入烟草专卖监管</b>（《电子烟管理办法》）",
-  "云南主要工业企业：<b>云南中烟工业有限责任公司</b>（下辖红塔集团、红云红河集团等）",
-  "主要品牌：<b>红塔山、玉溪、云烟、红河、红梅</b>"
+{ id:"sheng", t:"云南省情（高频送分）", tag:"公基", items:[
+  ["c","面积 <b>39.4 万 km²</b>，常住人口约 <b>4700 万</b>，下辖 <b>16 个州市</b>，省会昆明"],
+  ["c","与 <b>缅甸、老挝、越南</b> 接壤，陆地边境线约 4000 多 km，<b>25 个边境县（市）</b>"],
+  ["c","三个定位：<b>民族团结进步示范区、生态文明建设排头兵、面向南亚东南亚辐射中心</b>"],
+  ["c","发展提法：<b>资源经济、园区经济、口岸经济</b>；<b>「3815」战略发展目标</b>（三年上台阶、八年大发展、十五年大跨越）"],
+  ["c","支柱产业：<b>烟草、旅游、电力（绿色能源）、有色金属、生物资源</b>；标志性工程 <b>中老铁路</b>"],
+  ["c","<b>云南是全国最大烤烟产区</b>，「两烟」（烤烟、卷烟）产量长期居全国首位"],
+  ["y","世居少数民族 <b>25 个</b>，其中<b>特有民族 15 个</b>，是我国民族种类最多的省份之一"],
+  ["y","三江并流：<b>金沙江、澜沧江、怒江</b>（世界自然遗产）；石林、澄江化石地同为世界自然遗产"],
+  ["y","最高峰：<b>梅里雪山卡瓦格博峰</b>（6740 m）；气候：立体气候、「四季如春」主要形容昆明"]
+], ext:[
+  "各州市面积人口的具体数字排名（几乎不考，遇到再记）",
+  "细枝末节的县域名胜、历史人物类知识点"
 ]},
-{ t:"公文基础（高频）", tag:"公基", items:[
-  "15 种法定公文：决议、决定、命令（令）、公报、公告、通告、意见、通知、通报、报告、请示、批复、议案、函、纪要",
-  "行文规则：<b>请示一事一文</b>；不得越级行文；<b>报告中不得夹带请示事项</b>；双重领导机关行文写明主送与抄送",
-  "标题格式：<b>发文机关 + 事由 + 文种</b>；成文日期用<b>阿拉伯数字</b>"
+{ id:"yancao", t:"烟草行业 & 专卖法核心条款", tag:"公基", items:[
+  ["c","管理体制：<b>统一领导、垂直管理、专卖专营</b>"],
+  ["c","国家烟草专卖局与中国烟草总公司 <b>一套机构、两块牌子</b>"],
+  ["c","《烟草专卖法》<b>1992 年 1 月 1 日</b>施行（1991 年通过）"],
+  ["c","<b>第 3 条</b>：国家对烟草专卖品的生产、销售、进出口依法实行专卖管理，并实行<b>烟草专卖许可证制度</b>"],
+  ["c","<b>第 10 条</b>：烟叶由<b>烟草公司或其委托单位</b>按国家规定的收购标准<b>统一收购</b>，其他单位和个人不得收购"],
+  ["c","<b>第 21 条</b>：托运或自运烟草专卖品<b>必须持有准运证</b>，无准运证的<b>承运人不得承运</b>"],
+  ["c","<b>第 22 条</b>：邮寄、异地携带烟叶和烟草制品，不得超过国务院有关主管部门规定的<b>限量</b>"],
+  ["c","<b>第 28 条</b>：擅自收购烟叶的，处以罚款，并按查获地上年度烟叶平均收购价格的 <b>70%</b> 收购"],
+  ["c","<b>第 29 条</b>：无准运证或超量运输的，罚款并按 <b>70%</b> 收购；情节严重的没收违法运输烟草专卖品和违法所得。承运人明知的，没收违法所得并处罚款"],
+  ["c","烟草专卖品范围：卷烟、雪茄烟、烟丝、复烤烟叶、烟叶、<b>卷烟纸、滤嘴棒、烟用丝束、烟草专用机械</b>"],
+  ["c","包装必须标<b>焦油量、烟碱量</b>及「吸烟有害健康」；禁止在<b>广播电台、电视台、报刊</b>播放刊登烟草广告"],
+  ["c","禁止向<b>未成年人</b>售烟；<b>电子烟已纳入烟草专卖监管</b>"],
+  ["y","零售需<b>烟草专卖零售许可证</b>（第 16 条）；经营范围和地域范围不得超出"],
+  ["y","云南主要工业企业：<b>云南中烟工业有限责任公司</b>（下辖红塔集团、红云红河集团等）"],
+  ["y","主要品牌：<b>红塔山、玉溪、云烟、红河、红梅</b>"],
+  ["y","1983 年国务院发布《烟草专卖条例》，随后设立<b>国家烟草专卖局</b>，专卖制度正式确立"]
+], ext:[
+  "《烟草专卖法实施条例》中极为具体的罚款比例条款（除非法条题，几乎不考）",
+  "各地方法规、专卖罚没款上缴流程等程序性细节"
 ]},
-{ t:"法律高频数字", tag:"公基", items:[
-  "宪法修改：全国人大全体代表 <b>2/3</b> 以上多数通过",
-  "民法典：<b>离婚冷静期 30 天</b>",
-  "劳动合同法：3 年以上合同试用期不超过 <b>6 个月</b>；竞业限制不超过 <b>2 年</b>",
-  "公务员法处分：警告、记过、记大过、降级、撤职、开除 —— <b>没有「罚款」</b>",
-  "行政处罚：警告、罚款、没收、责令停产停业、暂扣吊销许可证、行政拘留"
+{ id:"gongwen", t:"公文基础（高频）", tag:"公基", items:[
+  ["c","15 种法定公文：决议、决定、命令（令）、公报、公告、通告、意见、通知、通报、报告、请示、批复、议案、函、纪要"],
+  ["c","行文规则：<b>请示一文一事</b>；不得越级行文；<b>报告中不得夹带请示事项</b>"],
+  ["c","标题格式：<b>发文机关 + 事由 + 文种</b>；成文日期用<b>阿拉伯数字</b>"],
+  ["c","请示 vs 报告：<b>请示</b>事前行文、要求批复；<b>报告</b>事中事后行文、不要求批复"],
+  ["y","结构层次序数：<b>一、→（一）→ 1. →（1）</b>，不得跳级混用"],
+  ["y","通报用于表彰/批评/情况传达；通告是公布社会有关方面应遵守或周知的事项"]
+], ext:[
+  "军用文书、法院文书等专门文种格式（不在烟草考试范围）"
 ]},
-{ t:"数量关系 · 只练这 3 类", tag:"行测", items:[
-  "<b>工程问题</b>：设总量为 1 或公倍数，效率 = 总量÷时间",
-  "<b>行程问题</b>：相遇 S=(v1+v2)t、追及 S=(v1−v2)t、流水 v顺=v船+v水",
-  "<b>利润问题</b>：利润=售价−成本，利润率=利润÷成本，打几折就是×零点几",
-  "其余难题 <b>统一蒙同一个选项</b>，把时间还给资料分析"
+{ id:"falv", t:"法律高频数字", tag:"公基", items:[
+  ["c","宪法修改：全国人大全体代表 <b>2/3</b> 以上多数通过（法律只需 1/2 以上）"],
+  ["c","民法典：<b>离婚冷静期 30 天</b>；8 周岁以上未成年人为<b>限制民事行为能力人</b>"],
+  ["c","诉讼时效一般为 <b>3 年</b>；最长保护期 20 年"],
+  ["c","劳动合同法：3 年以上合同试用期不超过 <b>6 个月</b>；竞业限制不超过 <b>2 年</b>"],
+  ["c","公务员法处分：警告、记过、记大过、降级、撤职、开除 —— <b>没有「罚款」</b>"],
+  ["c","行政处罚：警告、罚款、没收违法所得/非法财物、责令停产停业、暂扣或吊销许可证、行政拘留"],
+  ["y","行政拘留一般 ≤15 日，合并执行 ≤20 日"],
+  ["y","行政处罚追责时效 <b>2 年</b>（治安管理处罚为 <b>6 个月</b>）"],
+  ["y","行政复议：一般自知道之日起 <b>60 日</b>内提出"],
+  ["y","刑法：<b>已满 16 周岁</b>负完全刑事责任；14 周岁以下不负刑事责任"]
+], ext:[
+  "冷门类部门法条文（如专属经济区、军用设施保护等）"
+]},
+{ id:"shuliang", t:"数量关系 · 战略性取舍", tag:"行测", items:[
+  ["c","<b>工程问题</b>：设总量为 1（或时间的最小公倍数），效率 = 总量÷时间"],
+  ["c","<b>行程问题</b>：相遇 S=(v₁+v₂)t、追及 S=(v₁−v₂)t、流水 v顺=v船+v水、v逆=v船−v水"],
+  ["c","<b>利润问题</b>：利润 = 售价−成本，利润率 = 利润÷成本，打几折就 ×零点几"],
+  ["c","<b>代入排除 / 数字特性</b>（奇偶、整除、尾数）是没思路时的第一选择，比列方程快"],
+  ["y","容斥原理：两集合 A∪B = A+B−A∩B；三集合画韦恩图"],
+  ["y","年龄问题：抓住<b>年龄差不变</b>"],
+  ["y","其余偏难题（复杂的排列组合、概率、几何、牛吃草）<b class=\"red\">统一蒙同一个选项</b>，把时间还给资料分析"]
+], ext:[
+  "复杂排列组合、概率期望、统筹优化类（直接跳过）"
 ]}
 ];
 
+/* ============ 🔴 微课指引（仅资料分析 + 判断推理，10~20 分钟短视频） ============
+   每条 = [考点, B站搜索词, 建议时长(分钟), 学完目标, 对应卡片] */
+var MICRO = [
+{g:"资料分析 · 概念与公式篇", ic:"📊", items:[
+ ["材料结构与读题顺序（文字/表格/图形/混合）","资料分析 材料类型 结构阅读",15,"30 秒内定位到要用的那一行，不再满表找数","必背 → 资料分析·六大概念"],
+ ["增长率 vs 增长量：一眼分清","资料分析 增长率 增长量 辨析",15,"读完题立刻判断求「率」还是求「量」，公式不再套错","必背 → 资料分析·六大概念"],
+ ["基期量计算 + 化除为乘","资料分析 基期量 化除为乘",15,"|r|≤5% 时改用乘法口算，比列除法快一倍","必背 → 资料分析·六大概念"],
+ ["比重：现期比重 → 基期比重","资料分析 基期比重 公式",15,"背下 A/B×(1+b)/(1+a)，考场不推导直接套","必背 → 资料分析·六大概念"],
+ ["两期比重差（升降判断 + 计算）","资料分析 两期比重 比重变化 百分点",15,"先判升降排除两项，再算差值，正确率立刻上去","必背 → 资料分析·六大概念"],
+ ["平均数与倍数（含「多几倍」坑）","资料分析 平均数 倍数",10,"分清「是几倍」和「多几倍」","必背 → 资料分析·六大概念"],
+ ["百分点 vs 百分数","资料分析 百分点 百分数 区别",10,"两个百分数相减用百分点，不再在这一条上丢分","必背 → 资料分析·六大概念"]
+]},
+{g:"资料分析 · 三大速算篇", ic:"⚡", items:[
+ ["截位直除","资料分析 截位直除 速算",15,"会判断截几位、选项挨得近时保留 4 位，一步估出答案","必背 → 资料分析·三大速算"],
+ ["特征数字法（百化分）","资料分析 特征数字法 百化分",15,"看到 14.3% 就想到 1/7，乘法秒变除法","必背 → 资料分析·三大速算"],
+ ["同位比较法（分数比大小）","资料分析 分数比较 同位比较 差分法",15,"不精算也能选出最大/最小","必背 → 资料分析·三大速算"],
+ ["放缩估算与选项差距的使用","资料分析 估算 放缩 选项差距",10,"知道什么时候可以粗算、什么时候必须精算","必背 → 资料分析·三大速算"],
+ ["真题限时示范（跟着做 2 篇）","资料分析 真题 限时 掐表 演示",20,"找到每题 ≤60 秒的节奏，限时不再做不完","刷题 → 资料分析"]
+]},
+{g:"判断推理 · 逻辑判断篇", ic:"🔗", items:[
+ ["翻译推理：如果 / 只有 / 除非","翻译推理 如果那么 只有才 除非否则",15,"题干一句话写出箭头，不靠语感猜","必背 → 逻辑判断"],
+ ["逆否命题与推理规则","翻译推理 逆否命题 推理规则",15,"秒识别「否前、肯后推不出」的陷阱选项","必背 → 逻辑判断"],
+ ["德·摩根定律与复合命题化简","翻译推理 摩根定律 或 且 要么",15,"「不(A 且 B)」这类句子会直接化简","必背 → 逻辑判断"],
+ ["真假推理：找矛盾 → 绕开 → 回看","真假推理 矛盾关系 反对关系",15,"题干给「几真几假」时的标准三步动作","必背 → 逻辑判断"],
+ ["削弱加强与搭桥 / 拆桥力度","削弱加强 搭桥 拆桥 力度比较",20,"能排出选项力度顺序，不再觉得两个都对","必背 → 逻辑判断"],
+ ["常见削弱套路：因果倒置 / 他因 / 样本","削弱 因果倒置 另有他因 样本不典型",15,"看到选项能叫出套路名","必背 → 逻辑判断"]
+]},
+{g:"判断推理 · 图形推理篇", ic:"🧩", items:[
+ ["图推总纲：先按元素是否相同分流","图形推理 解题顺序 元素相同 位置优先",15,"拿到题先分大类，不再挨个瞎试规律","必背 → 图形推理"],
+ ["位置类：平移、旋转、翻转","图形推理 位置规律 平移 旋转 翻转",15,"会数步数、方向、越界循环","必背 → 图形推理"],
+ ["样式类：遍历、叠加、去同存异","图形推理 样式 遍历 去同存异",15,"三图叠加类一眼识别","必背 → 图形推理"],
+ ["属性类：对称、开闭、曲直","图形推理 属性 对称性 对称轴数量",15,"一眼看出对称轴数量与方向的变化","必背 → 图形推理"],
+ ["数量类：点线角面素 + 一笔画","图形推理 数量类 一笔画 奇点",20,"会用奇点数判定笔画数","必背 → 图形推理"],
+ ["空间重构：相对面 + 橡皮法","图形推理 空间重构 六面体 相对面",15,"30 秒排除错误选项","必背 → 图形推理"]
+]},
+{g:"判断推理 · 提分包", ic:"🎯", items:[
+ ["定义判断：抓关键词","定义判断 抓关键词 主体 目的 客体",15,"读定义只在关键词处画圈，读题速度翻倍","必背 → 定义判断&类比"],
+ ["类比推理：横向关系 → 纵向辨析","类比推理 逻辑关系 并列 包含 对应",15,"两步法做题，不再靠语感","必背 → 定义判断&类比"]
+]}];
+
+/* 🟡 次重要：直接背卡片，不配视频 */
+var YELLOW = [
+ ["言语理解","高频成语与易混辨析、中心句位置、逻辑填空两步法"],
+ ["数量关系","只练工程、行程、利润 + 代入排除，其余统一蒙"],
+ ["云南省情","面积人口、三个定位、3815、支柱产业、烤烟第一产区"],
+ ["烟草常识与专卖法","管理体制、第 3/10/21/22/28/29 条、专卖品范围、电子烟入监管"],
+ ["公文基础","15 种法定文种、请示 vs 报告、行文规则、标题与日期格式"],
+ ["法律高频","宪法 2/3、离婚冷静期 30 天、试用期 6 个月、竞业限制 2 年、处罚追责时效"],
+ ["专业课","电路/数电/计网/STM32 与总线/数据库/传感器/自动控制"]
+];
+/* 🔵 拓展选学：折叠收纳，不进每日任务 */
+var BLUE = [
+ ["资料分析","年均增长率精确开方、多重混合比例方程、隔级比重嵌套"],
+ ["判断推理","图推冷门变体（三视图、多面体折叠）、复杂组合排列"],
+ ["公基","冷门文史、理化杂项、时政细枝末节、各地方法规细节"],
+ ["专业课","复杂信号推导（傅里叶/拉氏变换推导）、模糊控制、高阶嵌入式底层原理、电磁场偏题"]
+];
+
+/* 模式A（零基础起步版）每日任务：微课 → 背卡片 → 刷题 → 复盘写个人总结 */
+var TASKS_A = {
+  0:[
+    ["🎬 微课 · 资料分析","看「增长率与增长量辨析」+「截位直除」两个片段 · 约 30 分钟","看完立刻关掉，不要接着刷别的课"],
+    ["背诵 · 资料分析","背「六大概念与公式」+「三大速算」两张卡 · 10 分钟","能默写公式才算过"],
+    ["刷题 · 资料分析","背公式表 → 2 篇材料 → 10 题 · 30 分钟","每题 ≤60 秒，正确率 75% 起步、冲刺 85%"],
+    ["🎬 微课 · 判断推理","看「翻译推理」+「图推总纲」片段 · 约 30 分钟","看完能自己写出箭头就算懂"],
+    ["背诵 + 刷题 · 判断推理","逻辑公式背 1 遍 + 图推 20 题 · 25 分钟","40 秒没思路立刻跳过"],
+    ["言语 + 公基","片段 10 题 + 选词 5 题；省情/烟草/公文/法律轮换背 · 30 分钟","见「必背」页"],
+    ["错题复盘 + 个人总结","把今天踩的坑写进卡片的「个人刷题总结」 · 10 分钟","写自己的话，别抄解析"]
+  ],
+  1:[
+    ["🎬 微课 · 查漏","只看今天错得最多的那一个考点片段 · 20 分钟","针对性补，绝不从头再看"],
+    ["行测限时","资料 / 判断 / 言语 成组掐表 · 70 分钟","一组一组掐，别散着刷"],
+    ["错题复盘 + 个人总结","更新昨天的总结 · 15 分钟","同类题错 2 次就标红"],
+    ["专业科目","电路 / 数电 / 单片机 / 计网 轮换 · 30 分钟","见「专业」页清单"],
+    ["公基滚动","背诵 + 刷题 · 20 分钟","云南时政每天扫一眼"]
+  ],
+  2:[
+    ["🎬 微课 · 冲刺查漏","只看自己薄弱点的片段 · 20 分钟","一周最多 2 次，别依赖视频"],
+    ["整卷模考","隔天 1 套限时做完 · 120 分钟","练「难题直接跳过」"],
+    ["复盘 + 个人总结","错题本 + 自己的套路笔记 · 30 分钟","考前 5 天只看这些"],
+    ["时政与申论","云南时政 + 烟草动态 + 金句 · 20 分钟","学习强国 10 分钟"]
+  ]
+};
+
 /* ============ 专业科目 ============ */
 var MAJOR = [
-["电路与电子技术","基本电路定律（KCL/KVL）、二极管/三极管特性、运算放大器基础（虚短虚断）"],
-["数字电路","逻辑门真值表、触发器（D/JK）、编码器/译码器、时序逻辑与组合逻辑区别"],
-["信号与系统","信号分类（连续/离散、周期/非周期）、傅里叶变换概念、<b>采样定理（fs ≥ 2fm）</b>"],
-["自动控制","开环 vs 闭环、<b>PID 三段各自作用</b>（P 快、I 消除稳态误差、D 抑制超调）、传递函数概念"],
-["单片机与嵌入式","<b>STM32 结构</b>、GPIO/中断/定时器、<b>UART / I2C / SPI 三种总线区别</b>（同步异步、线数、速率）"],
-["传感器与检测","常用传感器原理（温度/压力/光电/霍尔）、信号调理、A/D 转换与分辨率"],
-["计算机网络","OSI 七层 vs TCP/IP 四层、常用端口（80/443/22/21/25/3306）、TCP 三次握手、子网划分"],
-["数据库","SQL 基本语句（增删改查、聚合、JOIN）、<b>事务 ACID</b>、索引作用、范式"],
-["通信原理","调制方式（ASK/FSK/PSK）、信道复用（时分/频分/码分）、误码率概念"]
+["电路与电子技术","基本电路定律（KCL/KVL）、二极管/三极管特性、运算放大器基础（虚短虚断）","y"],
+["数字电路","逻辑门真值表、触发器（D/JK）、编码器/译码器、时序逻辑与组合逻辑区别","y"],
+["信号与系统","信号分类（连续/离散、周期/非周期）、傅里叶变换概念、<b>采样定理（fs ≥ 2fm）</b>","y"],
+["自动控制","开环 vs 闭环、<b>PID 三段各自作用</b>（P 快、I 消除稳态误差、D 抑制超调）、传递函数概念","y"],
+["单片机与嵌入式","<b>STM32 结构</b>、GPIO/中断/定时器、<b>UART / I2C / SPI 三种总线区别</b>（同步异步、线数、速率）","y"],
+["传感器与检测","常用传感器原理（温度/压力/光电/霍尔）、信号调理、A/D 转换与分辨率","y"],
+["计算机网络","OSI 七层 vs TCP/IP 四层、常用端口（80/443/22/21/25/3306）、TCP 三次握手、子网划分","y"],
+["数据库","SQL 基本语句（增删改查、聚合、JOIN）、<b>事务 ACID</b>、索引作用、范式","y"],
+["通信原理","调制方式（ASK/FSK/PSK）、信道复用（时分/频分/码分）、误码率概念","y"]
+];
+var MAJOR_EXT = [
+ "傅里叶 / 拉普拉斯变换的完整推导过程",
+ "模糊控制、神经网络控制的底层数学推导",
+ "高阶嵌入式：寄存器级别外设驱动编写、启动文件分析",
+ "电磁场与电磁波的计算题、天线设计类题目"
 ];
 
 /* ============ 面试 ============ */
@@ -334,25 +561,53 @@ function stageIdx(){
   if(n<STAGES[0].s) return 0;
   return STAGES.length-1;
 }
-/* 连续打卡 */
+/* 连续打卡：今天还没做就从昨天开始数，一直往前数到断的那天 */
 function streak(){
   var n=0,d=new Date();
+  if(dayN(fmt(d))===0) d.setDate(d.getDate()-1);
   for(var i=0;i<400;i++){
-    var k=LSK(fmt(d)), v=get(k,null);
-    if(v && v.n){ n++; d.setDate(d.getDate()-1); } else { if(i===0){d.setDate(d.getDate()-1);continue} break; }
+    if(dayN(fmt(d))>0){ n++; d.setDate(d.getDate()-1); } else break;
   }
   return n;
 }
 function fmt(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
 
-/* ============ 今日 ============ */
+/* ============ 今日（模式 A / B） ============ */
+function lvp(l){
+  if(l==="c") return '<span class="lv lv-c">🔴核心</span>';
+  if(l==="y") return '<span class="lv lv-y">🟡次重要</span>';
+  return '<span class="lv lv-b">🔵拓展</span>';
+}
+function copy(txt){
+  var ok=false;
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt);ok=true} }catch(e){}
+  if(!ok){
+    try{
+      var ta=document.createElement("textarea");ta.value=txt;ta.setAttribute("readonly","");
+      ta.style.position="fixed";ta.style.opacity=0;ta.style.top="0";
+      document.body.appendChild(ta);ta.select();ta.setSelectionRange(0,txt.length);
+      ok=document.execCommand("copy");document.body.removeChild(ta);
+    }catch(e){ok=false}
+  }
+  toast(ok?"已复制搜索词，去 B 站粘贴 ✅":"复制失败，长按搜索词自己复制");
+}
+/* 某天完成的任务数（A/B 两种模式都算） */
+function dayN(dstr){
+  var a=get(LSK(dstr)+"_A",{}),b=get(LSK(dstr),{}),n=0,kk;
+  for(kk in a){if(a[kk])n++}
+  for(kk in b){if(b[kk])n++}
+  return n;
+}
+function mode(){return get("ihub_mode","A")}
+function taskKey(m){return m==="A"?LSK(today())+"_A":LSK(today())}
+
 function renderToday(){
-  var si=stageIdx(), st=STAGES[si], k=LSK(today());
-  var done=get(k,{});
-  var days=Math.max(0,Math.ceil((EXAM-new Date())/86400000));
-  var list=TASKS[si], dn=0;
-  list.forEach(function(t,i){ if(done["t"+i]) dn++; });
+  var si=stageIdx(), st=STAGES[si], m=mode();
+  var done=get(taskKey(m),{});
+  var list=(m==="A"?TASKS_A:TASKS)[si], dn=0,i;
+  for(i=0;i<list.length;i++){ if(done["t"+i]) dn++; }
   var pct=Math.round(dn/list.length*100);
+  var days=Math.max(0,Math.ceil((EXAM-new Date())/86400000));
 
   var h='<div class="hero">'+
     '<div class="big">'+days+' <span style="font-size:15px;font-weight:500">天</span></div>'+
@@ -360,9 +615,28 @@ function renderToday(){
     '<div class="sub">'+st.d+'</div>'+
     '<div class="stats">'+
       '<div class="stat"><b>'+dn+'/'+list.length+'</b><span>今日任务</span></div>'+
-      '<div class="stat"><b>'+streak()+'</b><span>连续天数</span></div>'+
+      '<div class="stat"><b id="s-streak">'+streak()+'</b><span>连续天数</span></div>'+
       '<div class="stat"><b>'+memDone()+'/'+MEM.length+'</b><span>必背已过</span></div>'+
     '</div><div class="bar"><i style="width:'+pct+'%"></i></div></div>';
+
+  h+='<div class="seg">'+
+     '<button data-mode="A" class="'+(m==="A"?"on":"")+'">模式A · 零基础起步<small>含微课片段</small></button>'+
+     '<button data-mode="B" class="'+(m==="B"?"on":"")+'">模式B · 刷题冲刺<small>不看视频</small></button>'+
+     '</div>';
+
+  h+='<div class="card"><div class="body" style="padding:12px 14px">'+
+     '<div class="k" style="margin:0"><b>学习说明（当前阶段）：</b>靠少量<b>高分模块</b>的短视频弄懂原理，不依赖网课；看懂之后依托卡片背重点，刷题时把自己踩过的坑写进卡片底部的「个人刷题总结」；大概一周后基础建起来，<b>切到模式B</b>，彻底不看视频，只循环「背卡片 + 刷题 + 更新总结」。</div>'+
+     '</div></div>';
+
+  if(m==="A"){
+    h+='<div class="card"><div class="body" style="padding:12px 14px">'+
+       '<div class="k" style="margin:0;background:var(--acc2)"><b>模式A 的链路：</b>🎬 看片段（看完就关）→ 🧠 背卡片 🔴+🟡 → ✏️ 刷题 → 📝 复盘写个人总结。<br><b>今天的片段：</b>见「🎬 微课」页，按序号往下看，不要跳。</div>'+
+       '</div></div>';
+  }else{
+    h+='<div class="card"><div class="body" style="padding:12px 14px">'+
+       '<div class="k" style="margin:0;background:var(--acc2)"><b>模式B 的链路：</b>🧠 背卡片 🔴+🟡 → ✏️ 刷题 → 📝 复盘写个人总结。<b class="red">不再看任何视频</b>，卡壳了就先看卡片，还不懂再回去单点补片段。</div>'+
+       '</div></div>';
+  }
 
   h+='<div class="sec">今天该做什么（点一下打勾）</div><div class="card">';
   list.forEach(function(t,i){
@@ -400,34 +674,78 @@ function renderToday(){
     '③ 网申台账看了吗？<b>有没有漏掉的公告</b>？</p></div></div>';
 
   $("#p-today").innerHTML=h;
+
+  /* 模式切换 */
+  Array.prototype.forEach.call($("#p-today").querySelectorAll("[data-mode]"),function(x){
+    x.onclick=function(){
+      set("ihub_mode",x.dataset.mode); renderToday();
+      toast(x.dataset.mode==="A"?"已切到模式A（含微课片段）":"已切到模式B（不看视频）");
+    };
+  });
+
+  /* 任务打勾 */
+  var key=taskKey(m);
   Array.prototype.forEach.call($("#p-today").querySelectorAll(".task"),function(x){
     x.onclick=function(){
-      var i=x.dataset.i, d=get(k,{});
-      d["t"+i]=!d["t"+i]; set(k,d);
+      var i=x.dataset.i, d=get(key,{});
+      d["t"+i]=!d["t"+i]; set(key,d);
       x.classList.toggle("ck",!!d["t"+i]);
       var n=0; Object.keys(d).forEach(function(kk){if(d[kk])n++});
       $("#p-today .bar i").style.width=Math.round(n/list.length*100)+"%";
       $("#p-today .stat b").textContent=n+"/"+list.length;
+      if($("#s-streak")) $("#s-streak").textContent=streak();
       if(n===list.length) toast("今天全部完成 🎉 连续 "+streak()+" 天");
     };
   });
 }
 function memDone(){var m=get("ihub_mem",{}),n=0;Object.keys(m).forEach(function(k){if(m[k])n++});return n}
 
-/* ============ 必背 ============ */
+/* ============ 必背（三级分层 + 个人刷题总结） ============ */
+function lvCount(g,l){var n=0;g.items.forEach(function(x){if(x[0]===l)n++});return n}
+function noteArea(id,nt){
+  var v=nt[id]||"";
+  return '<div class="mynote"><div class="mytitle">📝 个人刷题总结（自己的坑点与口诀）</div>'+
+    '<textarea class="note" data-note="'+id+'" placeholder="做完题回到这里写：今天错在哪 / 下次怎么避免 / 自己总结的口诀（自动存本机）">'+String(v).replace(/</g,"&lt;")+'</textarea>'+
+    '<div class="notehint" id="hint-'+id+'">'+(v?("已存 "+String(v).length+" 字"):"写完自动保存到本机，明天打开还在")+'</div></div>';
+}
+function bindNotes(root){
+  Array.prototype.forEach.call(root.querySelectorAll("[data-note]"),function(x){
+    x.oninput=function(){
+      var id=x.dataset.note, nt=get("ihub_note",{});
+      nt[id]=x.value; set("ihub_note",nt);
+      var hd=$("#hint-"+id); if(hd) hd.textContent="已自动保存 · "+x.value.length+" 字";
+    };
+  });
+}
 function renderMem(){
-  var m=get("ihub_mem",{});
+  var m=get("ihub_mem",{}), nt=get("ihub_note",{});
   var h='<div class="hero"><div class="big">'+memDone()+' / '+MEM.length+'</div>'+
     '<div class="sub">点标题展开，读完点「记住了」打勾 · 进度存本机</div>'+
     '<div class="bar"><i style="width:'+Math.round(memDone()/MEM.length*100)+'%"></i></div></div>';
+
+  h+='<div class="card"><div class="body" style="padding:12px 14px">'+
+     '<div class="k" style="margin:0"><span class="lv lv-c">🔴核心</span> 高分大头，先看懂原理再背（配微课，见「🎬 微课」页）</div>'+
+     '<div class="k" style="margin:7px 0 0"><span class="lv lv-y">🟡次重要</span> 必须背，但不看视频，直接背 + 刷题</div>'+
+     '<div class="k" style="margin:7px 0 0"><span class="lv lv-b">🔵拓展</span> 折叠在卡片最底下，<b>时间不足直接跳过</b>，不删也不任务化</div>'+
+     '</div></div>';
+
   h+='<div class="sec">全部必背（共 '+MEM.length+' 组）</div>';
   MEM.forEach(function(g,gi){
+    var nc=lvCount(g,"c"), ny=lvCount(g,"y"), nb=(g.ext||[]).length;
     var ck=m["m"+gi]?" ✅":"";
-    h+='<details class="card" data-m="'+gi+'"><summary><span>'+g.t+'</span><span class="tag">'+g.tag+'</span><span class="done">'+ck+'</span></summary>'+
-       '<div class="body"><ul>'+g.items.map(function(x){return "<li>"+x+"</li>"}).join("")+'</ul>'+
+    h+='<details class="card" data-m="'+gi+'"><summary><span style="flex:1">'+g.t+'</span>'+
+       '<span class="chips">🔴'+nc+' 🟡'+ny+(nb?(' 🔵'+nb):'')+'</span>'+
+       '<span class="tag">'+g.tag+'</span><span class="done">'+ck+'</span></summary>'+
+       '<div class="body"><ul>'+g.items.map(function(x){return "<li>"+lvp(x[0])+x[1]+"</li>"}).join("")+'</ul>';
+    if(nb){
+      h+='<details class="ext"><summary>🔵 拓展选学 '+nb+' 条（时间不足直接跳过）</summary><div class="body"><ul>'+
+         g.ext.map(function(x){return "<li>"+lvp("b")+x+"</li>"}).join("")+'</ul></div></details>';
+    }
+    h+=noteArea(g.id,nt)+
        '<div class="k" style="text-align:center;cursor:pointer" data-ok="'+gi+'">👆 点这里标记「记住了」</div></div></details>';
   });
   $("#p-mem").innerHTML=h;
+  bindNotes($("#p-mem"));
   Array.prototype.forEach.call($("#p-mem").querySelectorAll("[data-ok]"),function(x){
     x.onclick=function(){
       var i=x.dataset.ok, m=get("ihub_mem",{});
@@ -440,17 +758,79 @@ function renderMem(){
   });
 }
 
+/* ============ 🎬 微课指引 & 考点分层总览 ============ */
+function mcNum(){var n=0;MICRO.forEach(function(g){n+=g.items.length});return n}
+function mcDone(){var c=get("ihub_mc",{}),n=0,k;for(k in c){if(c[k])n++}return n}
+function renderCourse(){
+  var c=get("ihub_mc",{}), i=0, k=0;
+  var total=mcNum(), done=mcDone();
+  var h='<div class="hero"><div class="big">'+done+' / '+total+'</div>'+
+    '<div class="sub">🔴 核心必学的微课片段，看完点右上角 ✓ 打勾 · 全部 10~20 分钟</div>'+
+    '<div class="bar"><i style="width:'+Math.round(done/total*100)+'%"></i></div></div>';
+
+  h+='<div class="card"><div class="body" style="padding:12px 14px">'+
+     '<div class="k" style="margin:0"><b>怎么用这一页：</b>零基础阶段，遇到资料分析 / 判断推理里看不懂的点，来这里找对应的<b>短视频片段</b>，看完立刻关掉，回去背卡片上的 🔴+🟡 知识点，然后马上刷题；<b>大概一周后</b>基本概念都懂了，就切到每日任务的<b>模式B</b>，彻底不再看视频。</div>'+
+     '<div class="k" style="margin:7px 0 0"><b>搜索词怎么用：</b>点「🔎 复制」到 B 站粘贴搜索，挑播放量高、时长 10~20 分钟的片段即可，<b>不要点进去整套系统课</b>。</div>'+
+     '</div></div>';
+
+  h+='<div class="sec">考点分层总览</div><div class="card"><div class="body" style="padding:12px 14px">'+
+     '<div class="k" style="margin:0"><span class="lv lv-c">🔴核心必学</span> <b>资料分析、判断推理</b>（配微课片段，共 '+total+' 条）—— 分数大头，必须先啃</div>'+
+     '<div class="k" style="margin:7px 0 0"><span class="lv lv-y">🟡次重要</span> '+
+       YELLOW.map(function(x){return x[0]}).join(" · ")+' —— 直接背卡片，不配视频</div>'+
+     '</div>'+
+     '<details class="ext" style="margin:10px 14px 12px"><summary>🔵 拓展选学（时间不足直接跳过，不进入每日任务）</summary><div class="body">'+
+       '<ul>'+BLUE.map(function(x){return "<li><b>"+x[0]+"</b>："+x[1]+"</li>"}).join("")+'</ul></div></details></div>';
+
+  MICRO.forEach(function(g){
+    h+='<div class="sec">'+g.ic+' '+g.g+'</div>';
+    g.items.forEach(function(it){
+      k=i;
+      h+='<div class="mc'+(c["mc"+k]?" done":"")+'" data-mc="'+k+'">'+
+         '<div class="mc-h"><span class="no">'+(k+1)+'.</span><span class="cx">'+it[0]+'</span><span class="mcbox">✓</span></div>'+
+         '<div class="mc-row"><span class="mc-k">🎬 片段约 '+it[2]+' 分钟</span>'+
+         '<span class="mc-k">🔎 '+it[1]+'</span>'+
+         '<span class="copy" data-cp="'+it[1].replace(/"/g,"&quot;")+'">复制搜索词</span></div>'+
+         '<div class="mc-g"><b>学完目标：</b>'+it[3]+'<br><span style="color:var(--tx3);font-size:12px">对应卡片：'+it[4]+'</span></div>'+
+         '</div>';
+      i++;
+    });
+  });
+
+  h+='<div class="sec">🟡 次重要清单（只背卡片，不看视频）</div>';
+  YELLOW.forEach(function(x){
+    h+='<details class="card"><summary><span style="flex:1">'+x[0]+'</span><span class="lv lv-y">🟡</span></summary>'+
+       '<div class="body"><p>'+x[1]+'</p></div></details>';
+  });
+
+  $("#p-course").innerHTML=h;
+  Array.prototype.forEach.call($("#p-course").querySelectorAll(".mc"),function(x){
+    x.querySelector(".mcbox").onclick=function(ev){
+      ev.stopPropagation();
+      var idx=x.dataset.mc, c=get("ihub_mc",{});
+      c["mc"+idx]=!c["mc"+idx]; set("ihub_mc",c);
+      x.classList.toggle("done",!!c["mc"+idx]);
+      $("#p-course .bar i").style.width=Math.round(mcDone()/mcNum()*100)+"%";
+      $("#p-course .big").textContent=mcDone()+" / "+mcNum();
+    };
+  });
+  Array.prototype.forEach.call($("#p-course").querySelectorAll("[data-cp]"),function(x){
+    x.onclick=function(ev){ev.stopPropagation();copy(x.dataset.cp)};
+  });
+}
+
 /* ============ 刷题 ============ */
 function renderQuiz(){
   var h='<div class="sec">各模块每天怎么刷（按投入产出比排）</div>';
   h+='<details class="card" open><summary>① 资料分析 · 每天 30 分钟<span class="tag">最该抢分</span></summary><div class="body">'+
     '<p><b>动作：</b>背公式表 → 2 篇材料 → 10 题。<b>每题 ≤60 秒。</b></p>'+
     '<p><b>目标正确率：</b><span class="grn">75% 起步，冲刺 85%</span>。这是唯一「练了就一定涨分」的模块。</p>'+
-    '<p><b>练什么：</b>截位直除、特征数字、同位比较（见「必背」页）。</p></div></details>';
+    '<p><b>练什么：</b>截位直除、特征数字、同位比较（见「必背」页）。</p>'+
+    '<p class="hl">零基础 / 卡顿就明显 → 先去「🎬 微课」页看前 12 条片段打底，看完立刻回来背卡片再刷题。</p></div></details>';
   h+='<details class="card"><summary>② 判断推理 · 每天 25 分钟<span class="tag">次之</span></summary><div class="body">'+
     '<p><b>动作：</b>图推 20 题（40 秒没思路就跳）+ 逻辑公式背 1 遍。</p>'+
     '<p><b>目标正确率：</b>70%。图推靠<b>认脸</b>（见 5 类高频），逻辑判断背完公式基本白送。</p>'+
-    '<p>定义判断抓四要素，类比先定内部关系。</p></div></details>';
+    '<p>定义判断抓四要素，类比先定内部关系。</p>'+
+    '<p class="hl">零基础 → 先去「🎬 微课」页看逻辑判断篇 + 图推篇各 6 条，看完再背卡片刷题。</p></div></details>';
   h+='<details class="card"><summary>③ 公基 · 每天 20~40 分钟<span class="tag">纯背</span></summary><div class="body">'+
     '<p>云南省情 / 烟草常识 / 公文 / 法律 <b>按天轮换</b>，见「必背」页。<b>滚动背</b>：今天背新的，明早复习昨天的。</p>'+
     '<p>目标正确率 65% —— 公基范围无限大，背到高频就够，别贪。</p></div></details>';
@@ -486,21 +866,31 @@ function renderQuiz(){
 
 /* ============ 专业 ============ */
 function renderMajor(){
-  var m=get("ihub_major",{});
+  var m=get("ihub_major",{}), nt=get("ihub_note",{});
   var n=0; MAJOR.forEach(function(x,i){if(m["x"+i])n++});
   var h='<div class="hero"><div class="big">'+n+' / '+MAJOR.length+'</div>'+
    '<div class="sub">点开复习，过完打勾 · 这是你的护城河</div>'+
    '<div class="bar"><i style="width:'+Math.round(n/MAJOR.length*100)+'%"></i></div></div>';
-  h+='<div class="sec">专业课复习清单</div><div class="card">';
+  h+='<div class="sec">专业课复习清单（全为 🟡 次重要：只背，不看视频）</div><div class="card">';
   MAJOR.forEach(function(x,i){
-    h+='<div class="task'+(m["x"+i]?" ck":"")+'" data-mj="'+i+'"><div class="box">✓</div><div><div class="t1">'+x[0]+'</div><div class="t2">'+x[1]+'</div></div></div>';
+    h+='<div class="task'+(m["x"+i]?" ck":"")+'" data-mj="'+i+'"><div class="box">✓</div><div><div class="t1">'+lvp(x[2]||"y")+x[0]+'</div><div class="t2">'+x[1]+'</div></div></div>';
   });
   h+='</div>';
+
+  h+='<div class="sec">📝 专业课个人总结</div>';
+  MAJOR.forEach(function(x,i){
+    h+='<details class="card"><summary><span style="flex:1">'+x[0]+'</span><span class="chips">写你自己的想法</span></summary>'+
+       '<div class="body"><p>'+x[1]+'</p>'+noteArea("mj"+i,nt)+'</div></details>';
+  });
+
+  h+='<details class="ext"><summary>🔵 专业课拓展选学（时间不足直接跳过）</summary><div class="body"><ul>'+
+     MAJOR_EXT.map(function(x){return "<li>"+lvp("b")+x+"</li>"}).join("")+'</ul></div></details>';
   h+='<div class="sec">怎么复习</div><div class="card"><div class="body">'+
     '<div class="k">把大学主修课的<b>期末复习资料再过一遍</b>就够了 —— 不要重新啃教材。</div>'+
     '<div class="k">用你简历里的 <b>STM32 / OpenHarmony / ROS2 项目</b>当「活的例子」去理解概念，<b>面试时能直接讲</b>。</div>'+
     '<div class="k grn">他们要在两三个月里从零学数字电路，而你是复习。</div></div></div>';
   $("#p-major").innerHTML=h;
+  bindNotes($("#p-major"));
   Array.prototype.forEach.call($("#p-major").querySelectorAll("[data-mj]"),function(x){
     x.onclick=function(){
       var i=x.dataset.mj,m=get("ihub_major",{});
@@ -589,7 +979,7 @@ function renderTips(){
 }
 
 /* ============ 渲染 & 交互 ============ */
-renderToday();renderMem();renderQuiz();renderMajor();renderIv();renderTips();
+renderToday();renderCourse();renderMem();renderQuiz();renderMajor();renderIv();renderTips();
 
 document.querySelectorAll("nav button").forEach(function(b){
   b.onclick=function(){
@@ -603,7 +993,7 @@ document.querySelectorAll("nav button").forEach(function(b){
 
 /* 搜索 */
 var allCards=[];
-function reindex(){allCards=Array.prototype.slice.call(document.querySelectorAll(".card,.task"))}
+function reindex(){allCards=Array.prototype.slice.call(document.querySelectorAll(".card,.task,.mc"))}
 reindex();
 $("#search").oninput=function(){
   var q=this.value.trim().toLowerCase();

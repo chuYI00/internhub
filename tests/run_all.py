@@ -68,6 +68,8 @@ def main() -> int:
         [PY, "tests/test_import_csv.py"], "CSV 导入 → 入库")
     results["🧭 岗位列表（排序 / 城市多选 / 报名中 / 发布时间兜底 / 临期标红）"] = run(
         [PY, "tests/test_joblist.py"], "岗位页：排序筛选 + 发布时间不许为空")
+    results["📒 手机备考手册（微课指引 / 三级标签 / 模式 A·B / 个人总结）"] = run(
+        [PY, "tests/test_study_card.py"], "备考卡片网页：真浏览器跑一遍，确认分层与原有功能都没坏")
     results["网页端冒烟（4 个页签 + 页签对齐 + 广投按钮）"] = run(
         [PY, "tests/test_app_smoke.py"], "Streamlit 无头渲染")
     results["简历定制链路"] = run(
