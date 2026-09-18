@@ -147,7 +147,7 @@ intern_tool/
 ├─ 监控烟草.bat / 生成备考方案.bat / 从剪贴板导入.bat / 导入岗位表.bat / 推送GitHub.bat
 ├─ 示例_导入模板.csv
 ├─ requirements.txt
-├─ 重构指令-给AI执行.md / 链接体检报告.md / 插件安装说明.md
+├─ 链接体检报告.md / 插件安装说明.md
 ├─ ihub/
 │  ├─ config.py          # 城市/省份、限速、robots 开关
 │  ├─ db.py              # SQLite：建表/迁移/去重/查询/收藏/投递状态
