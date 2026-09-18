@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sys
 
@@ -33,6 +34,27 @@ SRC = os.path.join(OUT, "源文件")
 
 def _log(*a):
     print(*a)
+
+
+def clean_old_resumes():
+    """清掉「对不上当前方向」的旧简历成品。
+
+    注意别写成「凡是 01_xxx_罗广睿.* 都删」——新生成的成品文件名也是这个形状，
+    那样每跑一次都会先把自己的产出删一遍。这里只在文件名与当前方向对不上时才删，
+    旧方向（比如 02_物联网IoT开发）自然会留下工件给新文件名让位。
+    """
+    wanted = {f"{i:02d}_{tailor.file_of(key)}_罗广睿" for i, key in enumerate(tailor.ORDER, 1)}
+    removed = []
+    if os.path.isdir(CV):
+        for fn in sorted(os.listdir(CV)):
+            m = re.match(r"^(\d{2}_.*_罗广睿)\.(docx|pdf|txt)$", fn)
+            if m and m.group(1) not in wanted:
+                try:
+                    os.remove(os.path.join(CV, fn))
+                    removed.append(fn)
+                except OSError as e:
+                    _log(f"  ! 删不掉 {fn}：{e}")
+    return removed
 
 
 def gen_resumes():
@@ -50,6 +72,11 @@ def gen_resumes():
             made.append(pdf)
         except Exception as e:                       # 缺 reportlab / 字体时降级
             _log(f"  ! {name} 未生成 PDF（{e}），docx 已就绪")
+        # 纯文本版：网申系统的大文本框里能整段复制粘贴（docx 里的格式会被吃掉）
+        txt = os.path.join(folder, name + ".txt")
+        with open(txt, "w", encoding="utf-8") as f:
+            f.write(tailor.plain_resume(key, None))
+        made.append(txt)
     return made
 
 
@@ -67,6 +94,20 @@ def gen_quickcard():
     p = os.path.join(OUT, "04_网申速填卡.txt")
     open(p, "w", encoding="utf-8").write(tailor.quickcard())
     return p
+
+
+def gen_usage():
+    """《九份简历 · 投递使用说明》：每份什么时候用 + 网申怎么贴 + 投递前自检。"""
+    md = os.path.join(OUT, "03_九份简历投递使用说明.md")
+    open(md, "w", encoding="utf-8").write(tailor.usage_md())
+    made = [md]
+    dx = os.path.join(OUT, "03_九份简历投递使用说明.docx")
+    try:
+        md2docx.build(md, dx)
+        made.append(dx)
+    except Exception as e:
+        _log(f"  ! 使用说明 docx 生成失败：{e}")
+    return made
 
 
 def gen_library():
@@ -132,22 +173,33 @@ def main() -> int:
     os.makedirs(CV, exist_ok=True)
     os.makedirs(SRC, exist_ok=True)
 
-    _log("[1/6] 生成简历（万能通用版 + 8 个岗位方向）…")
+    _log("[0/7] 清掉旧的 8 份定向简历成品（旧方向名会误导，用户要求「替换」不是「并存」）…")
+    old = clean_old_resumes()
+    for fn in old:
+        _log(f"      - 已删除 {fn}")
+    if not old:
+        _log("      (没有旧文件)")
+
+    _log("[1/7] 生成简历（万能通用版 + 8 个岗位方向：docx / pdf / txt）…")
     files = gen_resumes()
     for f in files:
         _log(f"      {os.path.getsize(f):>8}  {os.path.relpath(f, ROOT)}")
 
-    _log("[2/6] 生成投递工作台网页…")
+    _log("[2/7] 生成投递使用说明…")
+    for f in gen_usage():
+        _log("      " + os.path.relpath(f, ROOT))
+
+    _log("[3/7] 生成投递工作台网页…")
     _log("      " + os.path.relpath(gen_workbench(), ROOT))
-    _log("[3/6] 生成网申速填卡…")
+    _log("[4/7] 生成网申速填卡…")
     _log("      " + os.path.relpath(gen_quickcard(), ROOT))
-    _log("[4/6] 生成资料库 JSON…")
+    _log("[5/7] 生成资料库 JSON…")
     _log("      " + os.path.relpath(gen_library(), ROOT))
-    _log("[5/6] 生成诊断报告 / 使用说明…")
+    _log("[6/7] 生成诊断报告 / 使用说明…")
     for f in gen_docs():
         _log("      " + os.path.relpath(f, ROOT))
 
-    _log("[6/6] 生成备考资料 docx + 渠道/平台清单 txt（备考冲刺资料/）…")
+    _log("[7/7] 生成备考资料 docx + 渠道/平台清单 txt（备考冲刺资料/）…")
     for _f in gen_channel_docs():
         _log("      " + os.path.relpath(_f, ROOT))
     _sd = gen_study_docs()

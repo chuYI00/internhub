@@ -45,6 +45,18 @@ const EXP = (() => {
   return sb.window.__IHUB_AUTOFILL__.profile();
 })();
 
+/* 「认得出但资料里没值」这条分支要用到一个空字段。
+   千万别写死「身高」「专业排名」—— 它们在 profile.json 里是有值的，
+   一旦资料补全会让这条断言假失败。这里动态挑一个真的没值的。 */
+const FIELDS_ALL = (() => {
+  const r = new El('body');
+  const sb = buildSandbox(r);
+  vm.runInContext(code, vm.createContext(sb), { filename: NAME });
+  return sb.window.__IHUB_AUTOFILL__.FIELDS;
+})();
+const EMPTY_FIELD = FIELDS_ALL.find(f => !String(EXP[f.k] || '').trim())
+  || { k: 'x_missing', label: '不存在的字段' };
+
 /* ============================ 结构构造器 ============================ */
 
 /** 北森式：<div class="ant-form-item"><div class="..-label">题目</div> 控件 </div> */
@@ -165,24 +177,25 @@ console.log('[3] 多档数据：按岗位方向取不同值，且绝不覆盖手
   const { api } = run(root);
   check('ROLE_VALS 里有期望薪资 / 求职意向 / 到岗时间',
     !!(api.ROLE_VALS.expected_salary && api.ROLE_VALS.intent && api.ROLE_VALS.available));
-  check('技术方向（ai）期望薪资高于内容方向（media）',
-    parseInt(api.ROLE_VALS.expected_salary.ai, 10) > parseInt(api.ROLE_VALS.expected_salary.media, 10),
-    [api.ROLE_VALS.expected_salary.ai, api.ROLE_VALS.expected_salary.media]);
+  // 方向 key 必须跟 tailor.ORDER 那套一致（技术岗 > 央国企岗）
+  check('AI 方向期望薪资高于国企方向（soe）',
+    parseInt(api.ROLE_VALS.expected_salary.aiapp, 10) > parseInt(api.ROLE_VALS.expected_salary.soe, 10),
+    [api.ROLE_VALS.expected_salary.aiapp, api.ROLE_VALS.expected_salary.soe]);
 
   // 切方向：资料里本来有值的字段**不能被悄悄改掉**
-  api.setDir('ai');
+  api.setDir('aiapp');
   const before = api.profile().expected_salary;
-  api.setDir('media');
+  api.setDir('soe');
   const after = api.profile().expected_salary;
   check('切方向不会悄悄改写已有的期望薪资', before === after, [before, after]);
 
   // 明确点「用本方向值」才覆盖
   const n = api.applyRoleDefaults();
   check('点「用本方向值」后才覆盖（返回改了几项）', n >= 3, n);
-  check('覆盖后取到的是 media 这一档', api.profile().expected_salary === api.ROLE_VALS.expected_salary.media,
+  check('覆盖后取到的是 soe 这一档', api.profile().expected_salary === api.ROLE_VALS.expected_salary.soe,
     api.profile().expected_salary);
-  api.setDir('ai'); api.applyRoleDefaults();
-  check('再切到 ai 档，值跟着变', api.profile().expected_salary === api.ROLE_VALS.expected_salary.ai,
+  api.setDir('aiapp'); api.applyRoleDefaults();
+  check('再切到 aiapp 档，值跟着变', api.profile().expected_salary === api.ROLE_VALS.expected_salary.aiapp,
     api.profile().expected_salary);
   api.clearOverrides();
 }
@@ -194,8 +207,10 @@ console.log('[4] 📊 填充报告：成功 / 需人工 分列，能一键定位
   root.appendChild(fieldRow('姓名', input({ name: 'n' })));       // 能填
   const unknown = input({ name: 'weird' });                        // 认不出来
   root.appendChild(fieldRow('身体高度（cm）', unknown));
-  const noVal = input({});                                          // 认得出但资料没值
-  root.appendChild(fieldRow('身高', noVal));
+  // 「认得出但资料里没值」：用一个当前确认为空的字段（不能写死身高，身高一直有值）
+  const noVal = input({});
+  root.appendChild(fieldRow(EMPTY_FIELD.label, noVal));
+  const TEST_VAL = '测试值ABC123';
   const { api } = run(root);
 
   const st = api.fillDoc(doc(root), 'empty');
@@ -208,7 +223,7 @@ console.log('[4] 📊 填充报告：成功 / 需人工 分列，能一键定位
   check('「需人工」每项带着元素引用（报告里点一下能跳过去）',
     st.failed.every(f => !!f.el));
   check('「需人工」每项有字段名与页面标签',
-    st.failed.some(f => f.keyLabel === '身高') && st.failed.some(f => /身体高度/.test(f.label)),
+    st.failed.some(f => f.keyLabel === EMPTY_FIELD.label) && st.failed.some(f => /身体高度/.test(f.label)),
     st.failed.map(f => [f.keyLabel, f.label]));
 
   const target = st.failed[0].el;
@@ -219,11 +234,11 @@ console.log('[4] 📊 填充报告：成功 / 需人工 分列，能一键定位
     target.style.outline);
 
   // 资料补上之后，同一页再填就应该成功
-  api.setOverride('height', '175');
+  api.setOverride(EMPTY_FIELD.k, TEST_VAL);
   const st2 = api.fillDoc(doc(root), 'empty');
-  check('补了资料后「身高」填进去了', noVal.value === '175', noVal.value);
+  check('补了资料后「' + EMPTY_FIELD.label + '」填进去了', noVal.value === TEST_VAL, noVal.value);
   check('补了资料后它从「需人工」里消失',
-    !st2.failed.some(f => f.key === 'height'), st2.failed.map(f => f.key));
+    !st2.failed.some(f => f.key === EMPTY_FIELD.k), st2.failed.map(f => f.key));
   api.clearOverrides();
 }
 

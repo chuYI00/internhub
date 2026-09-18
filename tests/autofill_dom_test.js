@@ -94,17 +94,18 @@ console.log('[3] 下拉框：性别 / 学历 / 籍贯（省市）');
   const degSel = select(['请选择', '大专', '本科及以上', '硕士研究生', '博士研究生'], { name: 'degree' });
   const homeSel = select(['请选择', '北京市', '云南省', '四川省'], { name: 'hometown' });
   const citySel = select(['请选择', '云南省', '四川省'], { name: 'currentCity' });
-  const rankSel = select(['请选择', '前 10%', '前 30%', '前 50%'], { name: 'rank' });
   root.appendChild(fieldRow('性别', sexSel));
   root.appendChild(fieldRow('最高学历', degSel));
   root.appendChild(fieldRow('籍贯', homeSel));
   root.appendChild(fieldRow('现居住地', citySel));
-  // 专业排名在 profile.json 里留空 —— 这正是"面板里当场补"的典型场景
-  root.appendChild(fieldRow('专业排名', rankSel));
+  // 户口性质在 profile.json 里始终为空 —— 这正是"面板里当场补"的典型场景。
+  // 别拿「专业排名」当空字段：它现在是有值的（11/44），这条断言会假失败。
+  const hhSel = select(['请选择', '农业', '非农业'], { name: 'householdType' });
+  root.appendChild(fieldRow('户口性质', hhSel));
 
   const { api } = run(root);
   const noHome = api.fillDoc(sandboxDoc(root), 'empty');
-  check('没资料的字段留空（不瞎猜）', rankSel.value === '请选择', rankSel.value);
+  check('没资料的字段留空（不瞎猜）', hhSel.value === '请选择', hhSel.value);
   api.setOverride('hometown', '云南大理');
   const st = api.fillDoc(sandboxDoc(root), 'overwrite');
   check('性别选中「男」', sexSel.value === '男', sexSel.value);
@@ -187,18 +188,19 @@ console.log('[7] 特殊控件：date / month / number / contenteditable');
 }
 
 /* ---------- 8. 页面上就地改资料（localStorage 覆盖） ---------- */
-console.log('[8] 就地补改：专业排名 = 前 30%（不重新生成脚本）');
+console.log('[8] 就地补改：户口性质 = 非农业（不重新生成脚本）');
 {
   const root = new El('body');
   const p = input({});
-  root.appendChild(fieldRow('专业排名', p));
+  root.appendChild(fieldRow('户口性质', p));
   const { api, sandbox } = run(root);
   let st = api.fillDoc(sandboxDoc(root), 'empty');
-  check('资料里没有专业排名时留空', p.value === '', p.value);
-  api.setOverride('rank', '前 30%');
+  check('资料里没有户口性质时留空', p.value === '', p.value);
+  api.setOverride('household_type', '非农业');
   st = api.fillDoc(sandboxDoc(root), 'overwrite');
-  check('补改后能填入', p.value === '前 30%', p.value);
-  check('覆盖值存在 localStorage', JSON.parse(sandbox.localStorage.getItem('ihub_profile_overrides_v1')).rank === '前 30%');
+  check('补改后能填入', p.value === '非农业', p.value);
+  check('覆盖值存在 localStorage',
+    JSON.parse(sandbox.localStorage.getItem('ihub_profile_overrides_v1')).household_type === '非农业');
   api.clearOverrides();
   check('恢复内置后覆盖清空', Object.keys(api.getOverrides()).length === 0);
 }

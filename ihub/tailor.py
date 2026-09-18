@@ -23,27 +23,58 @@ from . import config
 
 KIT_PATH = os.path.join(config.PROJECT_ROOT, "data", "resume_kit.json")
 
-ORDER = ["hw", "iot", "ai", "auto", "test", "aviation", "prod", "media"]
+# 8 个岗位方向（2026-09 重排：主攻「物联网嵌入式 / 电子电气硬件 / AI 系统集成」三条腿 +
+# 国企·烟草 / 测试 / 运维 / 智能制造 / 管培生 五种常见校招口径）。改这里 → 生成顺序同步变。
+ORDER = ["iotembed", "ee", "aiapp", "soe", "mfg", "test", "ops", "trainee"]
+
+# 没任何线索时的兜底（用最通用的「校招技术管培生」）
+FALLBACK_DIR = "trainee"
+
+# 强特征词：命中一次就压过普通关键词。
+# 没有这层的话，投烟草的技术岗 JD 会因为写了「电气 / 机电 / 设备」被判成智能制造——
+# 「电气设备」是几乎所有技术岗的通用词，而「烟草 / 中烟 / 专卖」才是真正的单位信号。
+STRONG = {
+    "iotembed": ["嵌入式", "单片机", "openharmony", "鸿蒙", "freertos", "rt-thread"],
+    "ee": ["原理图", "pcb", "pcba", "eda软件", "示波器"],
+    "aiapp": ["大模型", "llm", "rag", "langchain", "知识库问答", "智能体"],
+    "soe": ["烟草", "中烟", "专卖", "卷烟", "烟叶", "国有企业", "央国企", "电网", "烟草公司"],
+    "mfg": ["plc", "slam", "ros2", "ros 2", "非标自动化", "机器视觉"],
+    "test": ["软件测试", "测试工程师", "测试用例", "黑盒"],
+    "ops": ["技术支持", "运维", "驻场", "售后服务"],
+    "trainee": ["管培生", "管理培训生", "储备干部"],
+}
+STRONG_BODY, STRONG_TITLE = 8, 15
+
 
 # 方向识别词表（越靠前的关键词权重越高；命中越多越可能被选中）
 DIRKEYS = {
-    "hw": ["嵌入式", "单片机", "mcu", "stm32", "freertos", "rtos", "固件", "驱动", "bsp", "硬件",
-           "电子工程", "pcb", "电路", "射频", "传感器", "c语言", "c/c++", "arm", "i2c", "spi",
-           "uart", "can", "电气工程", "器件", "datasheet"],
-    "iot": ["物联网", "iot", "mqtt", "智能硬件", "传感网", "华为云", "设备接入", "nb-iot", "lora",
-            "zigbee", "coap", "边缘计算", "智能家居", "智慧", "网关"],
-    "ai": ["人工智能", "大模型", "llm", "算法", "langchain", "rag", "智能体", "agent", "prompt",
-           "提示词", "nlp", "机器学习", "深度学习", "aigc", "模型", "向量", "chatgpt", "知识库"],
-    "auto": ["自动化", "控制", "机器人", "ros", "运动控制", "plc", "伺服", "产线", "调试",
-             "系统集成", "导航", "slam", "运动规划", "机电", "设备工程", "电气"],
-    "test": ["测试", "qa", "质量管理", "运维", "技术支持", "售后", "实施", "it支持", "系统维护",
-             "网络管理", "故障", "排障", "客服工程", "驻场"],
-    "aviation": ["民航", "航空", "机场", "空管", "航司", "运输", "国企", "事业单位", "烟草",
-                 "电力", "铁路", "政府", "集团", "航道", "通航"],
-    "prod": ["产品经理", "解决方案", "售前", "需求分析", "项目经理", "技术支持", "实施顾问",
-             "产品设计", "用户研究", "brd", "prd", "商业化"],
-    "media": ["运营", "新媒体", "内容", "短视频", "直播", "剪辑", "编导", "文案", "市场", "品牌",
-              "营销", "社群", "编辑", "账号", "图文", "增长", "投放"],
+    "iotembed": ["嵌入式", "单片机", "mcu", "stm32", "freertos", "rtos", "固件", "驱动", "bsp",
+                 "物联网", "iot", "mqtt", "智能硬件", "传感网", "华为云", "设备接入", "nb-iot",
+                 "lora", "zigbee", "coap", "边缘计算", "智能家居", "网关", "c语言", "arm",
+                 "i2c", "spi", "uart", "can", "鸿蒙", "openharmony", "低功耗", "嵌入式软件"],
+    "ee": ["原理图", "pcb", "layout", "pcba", "硬件设计", "硬件工程师", "电路", "射频",
+           "dc-dc", "emi", "示波器", "万用表", "电气工程", "强电", "弱电", "继电保护",
+           "配电", "变电", "电机", "变频器", "元器件", "datasheet", "altium", "模电", "数电",
+           "信号与系统", "eda", "打样", "电子工程", "焊接调试"],
+    "aiapp": ["人工智能", "大模型", "llm", "算法", "langchain", "rag", "智能体", "agent", "prompt",
+              "提示词", "nlp", "机器学习", "深度学习", "aigc", "模型", "向量", "chatgpt",
+              "知识库", "知识图谱", "deepseek", "微调", "diffusion", "chatglm"],
+    "soe": ["国企", "央企", "国有企业", "烟草", "中烟", "专卖", "电力", "电网", "事业单位",
+            "政府", "集团", "铁路", "机场", "航空", "民航", "港务", "航道", "有色", "冶金",
+            "矿产",             "市政", "机关", "央国企", "中国烟草", "国家电网", "南方电网", "烟草专卖局",
+            "烟叶", "卷烟", "复烤"],
+    "test": ["测试工程师", "软件测试", "硬件测试", "黑盒", "白盒", "测试用例", "功能测试",
+             "性能测试", "回归测试", "缺陷", "bug", "jira", "禅道", "质量", "qa", "qc",
+             "测试开发", "自动化测试", "验收", "可靠性试验"],
+    "ops": ["技术支持", "运维", "实施", "交付", "驻场", "售后", "it支持", "网络管理",
+            "故障", "排障", "巡检", "值班", "helpdesk", "服务台", "linux运维", "系统维护",
+            "it运维", "售后工程师", "解决方案工程师", "客服工程", "客户成功"],
+    "mfg": ["自动化", "控制", "机器人", "ros", "运动控制", "plc", "伺服", "产线", "调试",
+            "系统集成", "导航", "slam", "运动规划", "机电", "设备工程", "电气", "智能制造",
+            "工业", "cnc", "节拍", "opc", "modbus", "工控", "dcs", "mes", "非标", "aoi",
+            "在线检测", "装调"],
+    "trainee": ["管培生", "管理培训生", "培训生", "储备干部", "储备生", "应届", "校招",
+                "后备人才", "星辰", "青苗", "春笋", "雏鹰", "启航", "训练营", "大学生计划"],
 }
 
 # JD ↘ 匹配分析用的通用词表
@@ -99,12 +130,19 @@ def detect(jd: str = "", title: str = "") -> tuple[str, dict, bool]:
                 s += min(n, 4) * (2 if len(w) > 3 else 1)
             if tt and w in tt:
                 s += 6                      # 岗位名里出现，权重高
+        for w in STRONG.get(k, ()):         # 强特征词单独计权，压过泛词
+            if w in t:
+                s += STRONG_BODY
+            if tt and w in tt:
+                s += STRONG_TITLE
         scores[k] = s
-    best, bv = "ai", -1
+    best, bv = FALLBACK_DIR, -1
     for k in ORDER:
         if scores[k] > bv:
             bv, best = scores[k], k
-    return best, scores, bv <= 0
+    # 一点线索都没有时，别按顺序返回第一个方向，直接给最通用的那份
+    weak = bv <= 0
+    return (FALLBACK_DIR if weak else best), scores, weak
 
 
 # ────────────────────────────────────────── 匹配分析
@@ -152,6 +190,22 @@ def _ctx(ctx: dict | None) -> tuple[str, str]:
     return str(ctx.get("company") or "").strip(), str(ctx.get("title") or "").strip()
 
 
+def meta1() -> str:
+    """顶部第一行基本信息：性别 | 政治面貌 | 出生日期 | 身高 | 籍贯。
+
+    国企/烟草类网申常见「身高」字段，这里写进简历头，来源是本人简历原文。
+    """
+    p = kit()["profile"]
+    return "　|　".join([x for x in (p.get("gender"), p.get("political"), p.get("birth"),
+                                    p.get("height"), p.get("hometown")) if x])
+
+
+def meta2() -> str:
+    """第二行联系方式：手机 | 邮箱 | 现居地。"""
+    p = kit()["profile"]
+    return "　|　".join([x for x in (p.get("phone"), p.get("email"), p.get("city")) if x])
+
+
 def _intent(key: str, ctx: dict | None) -> str:
     d = direction(key)
     co, jt = _ctx(ctx)
@@ -173,7 +227,14 @@ def _projects(key: str):
 
 
 def _edu_bullets() -> list:
+    """教育背景下的 3 条 bullet。
+
+    优先读 data/resume_kit.json 里的 eduBullets（单一数据源，改 JSON 就生效）；
+    没有时再按 profile 拼装。别让 JSON 里躺着一份、代码里硬编码一份。
+    """
     k = kit()
+    if k.get("eduBullets"):
+        return list(k["eduBullets"])
     p = k["profile"]
     return [f'GPA {p["gpa"]}，无挂科；连续三年获校级“人民奖学金”（2023–2026 学年）',
             f'英语：{p["english"]}，可无障碍阅读英文技术文档与器件 datasheet',
@@ -186,8 +247,8 @@ def md_resume(key: str, ctx: dict | None = None) -> str:
     d = direction(key)
     p = k["profile"]
     L = [f'# {p["name"]}',
-         "　|　".join([p["gender"], p["political"], p["birth"], p["hometown"]]),
-         "　|　".join([p["phone"], p["email"], p["city"]]),
+         meta1(),
+         meta2(),
          f'{p["school"]} · {p["college"]} · {p["major"]}（{p["degree"]}在读） · 2027 届',
          f'**求职意向：{_intent(key, ctx)}**', '',
          "## 核心亮点"]
@@ -225,8 +286,8 @@ def html_resume(key: str, ctx: dict | None = None, for_word: bool = False) -> st
         H.append('<div class="cv-name">' + p["name"] + "</div>")
     else:
         H.append('<div class="cv-name">' + p["name"] + "</div>")
-    H.append('<div class="cv-meta">' + "　|　".join([p["gender"], p["political"], p["birth"], p["hometown"]]) + "</div>")
-    H.append('<div class="cv-meta">' + "　|　".join([p["phone"], p["email"], p["city"]]) + "</div>")
+    H.append('<div class="cv-meta">' + meta1() + "</div>")
+    H.append('<div class="cv-meta">' + meta2() + "</div>")
     H.append('<div class="cv-meta">' + f'{p["school"]} · {p["college"]} · {p["major"]}（{p["degree"]}在读） · 2027 届' + "</div>")
     H.append('<div class="cv-intent">求职意向：<b>' + _intent(key, ctx) + "</b></div>")
     H.append("<h3>核心亮点</h3><ul>" + "".join("<li>" + k["highlights"][x] + "</li>" for x in d["highlights"]) + "</ul>")
@@ -355,10 +416,8 @@ def resume_docx(key: str, out_path: str, ctx: dict | None = None) -> str:
         pPr.append(bdr)
 
     para(p["name"], NAME, True, ACCENT, WD_ALIGN_PARAGRAPH.CENTER, after=0.5, line=1.0)
-    para("　|　".join([p["gender"], p["political"], p["birth"], p["hometown"]]),
-         8.4, False, GREY, WD_ALIGN_PARAGRAPH.CENTER, after=0.5, line=1.0)
-    para("　|　".join([p["phone"], p["email"], p["city"]]),
-         9.2, False, DARK, WD_ALIGN_PARAGRAPH.CENTER, after=0.5, line=1.0)
+    para(meta1(), 8.4, False, GREY, WD_ALIGN_PARAGRAPH.CENTER, after=0.5, line=1.0)
+    para(meta2(), 9.2, False, DARK, WD_ALIGN_PARAGRAPH.CENTER, after=0.5, line=1.0)
     para(f'{p["school"]} · {p["college"]} · {p["major"]}（{p["degree"]}在读） · 2027 届',
          8.8, False, GREY, WD_ALIGN_PARAGRAPH.CENTER, after=1.5, line=1.0)
     pp = doc.add_paragraph()
@@ -467,8 +526,8 @@ def build_pdf(key: str, out_path: str, ctx: dict | None = None) -> str:
                           textColor=GREY, alignment=TA_RIGHT)
 
     flow = [Paragraph(esc(p["name"]), st_n),
-            Paragraph(esc("　|　".join([p["gender"], p["political"], p["birth"], p["hometown"]])), st_m),
-            Paragraph(esc("　|　".join([p["phone"], p["email"], p["city"]])), st_c),
+            Paragraph(esc(meta1()), st_m),
+            Paragraph(esc(meta2()), st_c),
             Paragraph(esc(f'{p["school"]} · {p["college"]} · {p["major"]}（{p["degree"]}在读） · 2027 届'), st_m),
             Paragraph(f'求职意向：<font name="MSYH-B">{esc(_intent(key, ctx))}</font>', st_i)]
 
@@ -593,9 +652,9 @@ def quickcard(key: str | None = None) -> str:
          f'主修课程：{k["courses"]}、操作系统、数据结构与算法、数据库系统原理',
          "作品/代码：https://github.com/chuYI00/internhub", "",
          "三、求职意向",
-         "意向岗位：AI 应用开发 / 嵌入式开发 / 物联网开发 / 自动化（按实际岗位名称填写）",
-         "意向城市：【按岗位填：大理 / 昆明 / 潍坊 / 北京 / 上海 / 不限】",
-         "期望薪资：面议　　到岗时间：可按要求时间到岗　　实习时长：可连续 2 个月以上", "",
+         f'意向岗位：{k["universal"]["intent"]}',
+         "意向城市：【按岗位填：昆明 / 大理 / 其他城市】",
+         "期望薪资：面议　　到岗时间：可按要求时间到岗", "",
          "四、项目经历（可整段粘贴）"]
     for pk, prj in k["projects"].items():
         L.append(f'【{prj["title"]}】{prj["role"]}　{prj["time"]}')
@@ -684,3 +743,100 @@ def packs() -> dict:
                     "skills": "\n".join(k["skills"][s] for s in d["skill_order"]),
                     "reason": fill_pack(key, None)[-1][1]}
     return out
+
+
+# ────────────────────────────────────────── 投递使用说明
+# 每个方向「什么时候该用这份」，写进 03_九份简历投递使用说明
+SCENE = {
+    "iotembed": "JD 里出现 **嵌入式 / MCU / STM32 / FreeRTOS / 驱动 / 物联网终端 / MQTT / 鸿蒙** 时用这份",
+    "ee": "JD 里出现 **原理图 / PCB / 硬件电路 / 电气 / 单片机硬件 / 元器件选型** 时用这份",
+    "aiapp": "JD 里出现 **大模型 / LLM / RAG / AI 应用 / 智能化 / 数字化转型 / 知识库** 时用这份",
+    "soe": ("**烟草专卖局、中烟工业、电网、机场集团、民航系统等央国企** 的技术 / 信息化 / 机电岗；"
+            "也用于 JD 里明确写了「服从分配」「能适应倒班」「到基层锻炼」的单位"),
+    "mfg": "JD 里出现 **自动化产线 / PLC / 伺服 / 机器人调试 / 设备工程师 / 智能制造** 时用这份",
+    "test": "JD 里出现 **测试 / QA / 黑盒白盒 / 测试用例 / 质量体系** 时用这份",
+    "ops": "JD 里出现 **技术支持 / 运维 / 现场实施 / 驻场 / 售后 / 交付** 时用这份",
+    "trainee": "JD 里出现 **管培生 / 培训生 / 储备干部**，或 JD 写得太笼统、看不出具体技术方向时用这份兜底",
+}
+
+
+def usage_md() -> str:
+    """生成《九份简历 · 投递使用说明》。所有个人信息都从 resume_kit 读，不手写第二遍。"""
+    k = kit()
+    p = k["profile"]
+    L = ["# 九份简历 · 投递使用说明",
+         "",
+         "> 1 份通用全能版 + 8 份岗位定向版，全部 1 页 pdf 排版，docx / pdf / txt 三种格式都在。"
+         "本文件的个人信息直接读自 `data/resume_kit.json`，不会写着写着走样。",
+         "",
+         "## 〇、个人信息真值表（**逐项核对过，任何版本都不许改**）",
+         "",
+         "| 项目 | 内容 |",
+         "| --- | --- |",
+         f'| 姓名 | {p["name"]} |',
+         f'| 手机 | **{p["phone"]}** |',
+         f'| 邮箱 | **{p["email"]}** |',
+         f'| 性别 / 身高 | {p["gender"]} / {p.get("height", "—")} |',
+         f'| 出生日期 | {p["birth"]} |',
+         f'| 政治面貌 / 民族 | {p["political"]} / {p["nation"]} |',
+         f'| 籍贯（生源地） | {p["hometown"]} |',
+         f'| 现居地 | {p["city"]} |',
+         f'| 学校 / 学院 | {p["school"]} · {p["college"]} |',
+         f'| 专业 / 学历 | {p["major"]}（{p["degree"]}，工学学士在读） |',
+         f'| 入学 / 毕业 | 2023.09 / 2027.06（2027 届） |',
+         f'| GPA | {p["gpa"]}（无挂科） |',
+         f'| 外语 | {p["english"]} |',
+         f'| 奖学金 | 连续三年校级“人民奖学金”（2023–2026 学年） |',
+         f'| 作品链接 | {p["github"]} |',
+         "",
+         "**铁律：上面每一项都取自本人原始简历。改 kit 之前先问过他本人。**",
+         "",
+         "## 一、九份文件对照表",
+         "",
+         "| 序号 | 文件名 | 方向 | 什么时候投这一份 |",
+         "| --- | --- | --- | --- |",
+         f'| 通用 | `02_万能通用版_{p["name"]}_{p["school"]}` | '
+         f'{k["universal"]["intent"]} | JD 看不出明显偏向，或一次要投很多家时用它打底 |']
+    for i, key in enumerate(ORDER, 1):
+        d = k["directions"][key]
+        L.append(f'| {i} | `{i:02d}_{d["file"]}_{p["name"]}` | {d["intent"]} | {SCENE.get(key, "")} |')
+    L += ["",
+          "## 二、30 秒选出该投哪一份",
+          "",
+          "1. 把 JD 粘进 `05_投递工作台.html`（或 App 的「📄 简历定制」页签）→ 它会自动识别方向并给匹配度；",
+          "2. 拿识别结果对着上面这张表找编号，下载对应的 pdf；",
+          "3. **拿不准就用通用版**，**JD 笼统得看不出技术方向就用管培生版**；",
+          "4. 投烟草 / 中烟这类单位，一律用第 4 份（国企央企综合技术岗），它的亮点排序就是为这个场景排的。",
+          "",
+          "## 三、网申系统怎么贴（四种场景）",
+          "",
+          "| 场景 | 用哪个文件 |",
+          "| --- | --- |",
+          "| 附件上传简历 | **pdf**（排版稳定，HR 看到的就是设计好的样子；要求可编辑时才传 docx） |",
+          "| 表单里逐字段填写 | 同名 **txt** 纯文本版，整段复制不丢字、不带隐藏格式 |",
+          "| 「自我介绍」「项目经历」「自我评价」大文本框 | `04_网申速填卡.txt` 第四 / 八 / 九节，按方向选一段 |",
+          "| 想一键自动填表 | `网申助手.user.js`（油猴脚本）或 `网申书签.txt`（免装扩展） |",
+          "",
+          "## 四、投递前必过 8 项自检",
+          "",
+          f'1. 电话是 **{p["phone"]}**、邮箱是 **{p["email"]}**（不是任何其他号码）——全项目已加自动校验；',
+          "2. 求职意向里的城市和单位名改成实际投递的（**不要留「潍坊」这类历史残留**）；",
+          "3. 文件另存为「罗广睿-岗位名-中国民航大学.pdf」再上传，别让 HR 猜；",
+          "4. 确认 pdf 只有 1 页（超页的简历 HR 基本不看第二页）；",
+          "5. 时间是 `2023.09 – 2027.06`，届别是 2027 届，别写成 2027.07 或其它；",
+          "6. JD 要求但你没做过的技术，**只在面试里说愿意学**，不要写进简历冒充熟练；",
+          "7. 同一批次同一个单位只投一个岗位（烟草系统重复投递会直接取消资格）；",
+          "8. 投完立刻记进投递台账（App 「📮 投递与网申」页签），别靠脑子记。",
+          "",
+          "## 五、为什么切成这 9 份",
+          "",
+          "走的是「**三条腿 + 五种口径**」：",
+          "",
+          "- **三条腿**（技术主线）：物联网/嵌入式、电子信息与电气自动化硬件、AI 应用与系统集成——"
+          "这三条正好覆盖物联网工程专业的全部出口，通用版把三条均衡地都摆上去；",
+          "- **五种口径**（招聘方的说法）：央国企综合技术岗、测试、技术支持运维、智能制造设备、管培生——"
+          "同一份经历换个说法，匹配度能差十几分；",
+          "- 每份只调整**亮点顺序、技能顺序、项目 bullet 的选择、自我评价**，"
+          "**经历的原文一个字都没变**，所以不会出现「改着改着编出没做过的事」。",
+          ""]
+    return "\n".join(L)

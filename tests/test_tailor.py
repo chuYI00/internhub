@@ -35,30 +35,37 @@ def check(name: str, cond: bool, extra=None) -> None:
 JD_EMBED = ("岗位职责：负责物联网终端设备嵌入式软件设计与开发；参与硬件方案评审，完成驱动调试与"
             "通信协议实现（UART/I2C/SPI/MQTT）。任职要求：本科及以上，电子信息、自动化、计算机相关专业；"
             "熟悉 C 语言与 STM32 开发，了解 FreeRTOS 者优先。")
-JD_MEDIA = "岗位职责：负责抖音账号短视频内容选题、剪辑与发布；跟进数据复盘与热点追踪。要求有内容运营经验。"
+JD_EE = ("岗位职责：负责原理图设计与 PCB Layout，完成样机焊接调试与电气性能测试；"
+         "编写器件选型与 BOM，处理 EMC / 信号完整性问题。要求电子、电气类专业，会看 datasheet。")
+JD_MFG = ("招聘岗位：自动化设备工程师。负责非标自动化产线 PLC 程序编写与调试、伺服参数设置、"
+          "机器视觉工位部署，参与设备验收与节拍优化。")
 JD_AVIATION = "中国民航局下属单位招聘信息化技术岗，要求电子信息类、计算机类专业，熟悉网络安全与数据库。"
 JD_AI = "参与大模型应用开发，使用 Python、LangChain、RAG、提示词工程与向量数据库构建知识库问答系统。"
+JD_SOE = ("云南省烟草公司下属单位招聘技术岗，要求本科及以上，电子信息 / 自动化 / 机电类专业，"
+          "负责生产设备电气维护与信息化系统运维，需服从分配、能适应倒班。")
 
 
 def main() -> int:
     from ihub import tailor as tk
 
-    print("[1] 方向识别")
-    cases = [(JD_EMBED, "嵌入式软件开发工程师", "hw"),
-             (JD_MEDIA, "新媒体运营实习生", "media"),
-             (JD_AVIATION, "信息化技术岗", "aviation"),
-             (JD_AI, "大模型应用开发实习生", "ai")]
+    print("[1] 方向识别（8 个新方向）")
+    cases = [(JD_EMBED, "嵌入式软件开发工程师", "iotembed"),
+             (JD_EE, "硬件工程师", "ee"),
+             (JD_MFG, "自动化设备工程师", "mfg"),
+             (JD_AVIATION, "信息化技术岗", "soe"),
+             (JD_AI, "大模型应用开发实习生", "aiapp"),
+             (JD_SOE, "机电技术岗（烟草）", "soe")]
     for jd, title, want in cases:
         got, scores, weak = tk.detect(jd, title)
         check(f"「{title}」→ {tk.label_of(got)}", got == want, {"got": got, "want": want, "scores": scores})
     got, _, weak = tk.detect("", "")
-    check("完全没线索时不报错", isinstance(got, str) and got in tk.ORDER, got)
+    check("完全没线索时兜底到管培生", got == tk.FALLBACK_DIR, got)
 
     print("[2] 匹配分析")
-    an = tk.analyze(JD_EMBED, "hw")
+    an = tk.analyze(JD_EMBED, "iotembed")
     check("算了匹配分", 35 <= an["score"] <= 96, an["score"])
     check("命中里有 STM32 / FreeRTOS", any(x.lower() in ("stm32", "freertos") for x in an["hit"]), an["hit"])
-    an2 = tk.analyze("要求熟练掌握 Cadence、HyperLynx、PCB 高速布线", "hw")
+    an2 = tk.analyze("要求熟练掌握 Cadence、HyperLynx、PCB 高速布线", "ee")
     check("没做过的技术会进 miss 而不是硬编进去", "Cadence" in an2["miss"], an2["miss"])
 
     print("[3] 各方向内容齐备")
@@ -92,10 +99,10 @@ def main() -> int:
                 check(f"{tk.label_of(key)} pdf 生成", False, str(e))
 
     print("[5] 求职意向带上目标公司/岗位")
-    md = tk.md_resume("hw", {"company": "某某科技", "title": "嵌入式软件工程师"})
+    md = tk.md_resume("iotembed", {"company": "某某科技", "title": "嵌入式软件工程师"})
     check("简历里出现公司与岗位名", "某某科技" in md and "嵌入式软件工程师" in md)
-    md2 = tk.md_resume("hw", None)
-    check("不传 ctx 时用方向默认意向", tk.direction("hw")["intent"] in md2)
+    md2 = tk.md_resume("iotembed", None)
+    check("不传 ctx 时用方向默认意向", tk.direction("iotembed")["intent"] in md2)
 
     print("[6] 速填卡 / 脚本资料包")
     qc = tk.quickcard()
@@ -112,7 +119,7 @@ def main() -> int:
     kit_dir = ROOT / "简历材料"
     if kit_dir.exists():
         for rel in ["02_万能通用版_罗广睿_中国民航大学.docx",
-                    "岗位定向简历/01_嵌入式硬件研发_罗广睿.pdf",
+                    "岗位定向简历/01_物联网嵌入式开发_罗广睿.pdf",
                     "05_投递工作台.html", "04_网申速填卡.txt", "08_资料库.json"]:
             check(f"存在 {rel}", (kit_dir / rel).exists())
         html = (kit_dir / "05_投递工作台.html").read_text(encoding="utf-8")

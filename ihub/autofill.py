@@ -50,6 +50,7 @@ EXTRA_KEYS = [
     "source", "hobby", "student_cadre", "social_practice", "research",
     "thesis", "patent", "archive", "bank", "volunteer1",
     "cet4", "teacher", "emergency_addr", "spouse", "children",
+    "specialty", "mentor", "research_area", "work_years", "cet6",
 ]
 for _k in EXTRA_KEYS:
     if _k not in KEYS:
@@ -200,6 +201,7 @@ _TEMPLATE = r"""// ==UserScript==
     { k: 'self_eval', label: '自我评价', keys: ['自我评价', '自我介绍', '个人评价', '个人简介', '个人优势', 'selfevaluation', 'aboutme'] },
     { k: 'experiences', label: '项目/实习经历', keys: ['项目经历', '实习经历', '工作经历', '实践经历', '项目经验', 'experience'] },
     { k: 'skills',    label: '技能特长', keys: ['技能', '专业技能', '特长', '擅长', 'skill'] },
+    { k: 'specialty', label: '文体特长', keys: ['文体特长', '个人特长', '运动特长', '体育特长', 'specialty'] },
     { k: 'highlights', label: '个人亮点', keys: ['个人亮点', '主要成绩', '优势亮点', 'highlight'] },
     { k: 'reason',    label: '申请理由', keys: ['申请理由', '求职信', '自荐信', '申请说明', 'coverletter'] },
     { k: 'emergency_name', label: '紧急联系人', keys: ['紧急联系人', '紧急联络人', '联系人姓名', 'emergencyname'] },
@@ -271,24 +273,30 @@ _TEMPLATE = r"""// ==UserScript==
   };
   FIELDS.forEach(function (f) { f.g = GROUP_OF[f.k] || 'other'; });
 
-  /* 多档数据：同一个字段，不同岗位方向填不同的值（技术岗 / 操作岗口径不一样） */
+  /* 多档数据：同一个字段，不同岗位方向填不同的值（技术岗 / 央国企岗口径不一样）
+     ⚠️ 这里的 key 必须跟 ihub/tailor.py 的 ORDER 对齐（换一套方向时两边一起改，
+        不然「多档数据」会悄悄失效——panel 上选了方向却取不到值，只会拿 universal 兜底）。 */
   var ROLE_VALS = {
     expected_salary: {
-      universal: '6000-8000', hw: '7000-9000', iot: '7000-9000', ai: '8000-10000',
-      auto: '6500-8500', test: '6000-8000', aviation: '6000-8000',
-      prod: '6000-8000', media: '5000-7000'
+      universal: '6000-8000', iotembed: '7000-9000', ee: '7000-9000',
+      aiapp: '8000-10000', soe: '5000-7000',
+      mfg: '6500-8500', test: '6000-8000', ops: '6000-8000', trainee: '6000-8000'
     },
     intent: {
-      universal: '电子信息 / 物联网 / 自动化相关技术岗', hw: '嵌入式开发 / 硬件研发',
-      iot: '物联网开发 / 嵌入式应用', ai: 'AI 应用开发 / 算法工程',
-      auto: '自动化 / 电气控制', test: '测试 / 运维 / 技术支持',
-      aviation: '民航信息技术 / 机场运行保障', prod: '产品 / 技术支持',
-      media: '内容运营 / AI 创作'
+      universal: '物联网 / 嵌入式 · 电子信息与电气自动化 · AI 应用相关技术岗',
+      iotembed: '物联网嵌入式开发 / 嵌入式软件',
+      ee: '电子工程师 / 硬件工程师 / 电气自动化',
+      aiapp: 'AI 应用开发 / 智能化系统集成',
+      soe: '国企信息化运维 / 生产设备技术支持 / 机电电气技术岗',
+      mfg: '智能制造 / 自动化设备 / 产线集成调试',
+      test: '测试工程师 / 嵌入式硬件测试',
+      ops: '技术支持工程师 / IT 运维 / 现场实施',
+      trainee: '技术类管培生 / 综合技术培训生'
     },
     available: {
-      universal: '随时可到岗', hw: '随时可到岗', iot: '随时可到岗', ai: '随时可到岗',
-      auto: '随时可到岗', test: '随时可到岗', aviation: '随时可到岗',
-      prod: '随时可到岗', media: '随时可到岗'
+      universal: '随时可到岗', iotembed: '随时可到岗', ee: '随时可到岗',
+      aiapp: '随时可到岗', soe: '毕业后可即刻到岗，服从单位安排',
+      mfg: '随时可到岗', test: '随时可到岗', ops: '随时可到岗', trainee: '随时可到岗'
     }
   };
 

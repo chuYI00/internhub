@@ -191,10 +191,11 @@ function cardRadios(cls, values) {
     const btns = root.descendants.filter(d => d.tagName === 'BUTTON' && d.textContent === '📋');
     check('面板为每个字段生成了复制按钮', btns.length === api.FIELDS.length,
       [btns.length, api.FIELDS.length]);
-    // 第 5 个字段是手机号（name/gender/birth/political/nation → 不对，直接按标签找）
+    // 按值找手机号那一行。注意：微信之类字段与手机号同值时也会命中，所以还要认标签。
     const rows = root.descendants.filter(d => d.tagName === 'INPUT' && d.value === EXP.phone);
-    check('面板里能看到手机号的值', rows.length === 1, rows.length);
-    const phoneRow = rows[0];
+    check('面板里能看到手机号的值', rows.length >= 1, rows.length);
+    const phoneRow = rows.find(d => d.parentElement && d.parentElement.children
+      .some(c => c.tagName === 'DIV' && /手机号/.test(c.textContent))) || rows[0];
     const btnsInRow = phoneRow.parentElement.descendants.filter(d => d.tagName === 'BUTTON');
     phoneRow.parentElement.querySelectorAll('button').filter(b => b.textContent === '📋')[0].click();
     check('点复制后剪贴板拿到手机号',

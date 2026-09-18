@@ -74,6 +74,9 @@ def main() -> int:
         [PY, "tests/test_app_smoke.py"], "Streamlit 无头渲染")
     results["简历定制链路"] = run(
         [PY, "tests/test_tailor.py"], "简历定制（方向识别 + 单页排版 + 网页页签）")
+    results["🛡️ 简历个人信息真值（电话/邮箱/6 个关键词 × 9 份 × 3 格式）"] = run(
+        [PY, "tests/test_resume_identity.py"],
+        "个人信息防线：任何一份简历的联系方式都不许与本人简历原文不一致")
 
     print("\n================ 汇总 ================")
     for k, v in results.items():

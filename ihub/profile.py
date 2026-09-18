@@ -15,11 +15,15 @@ from . import config
 PROFILE_PATH = os.path.join(config.DATA_DIR, "profile.json")
 
 DEFAULT = {
-    "name": "示例同学",
+    # ⚠️ 铁律：这里**不允许**出现任何真实个人信息，也**不允许**出现看起来像真的手机号/邮箱。
+    # 历史上这里放过 "13800000000" 的"示例号码"，结果被直接填进网申表单，
+    # 导致投递出去的简历联系方式是错的。教训：宁可留空让字段被跳过，也不能给假号码。
+    # 真实资料一律写在 data/profile.json（已 gitignore），或在网页「👤 我的资料」里填。
+    "name": "",
     "gender": "男",
     "city": "云南大理",
-    "phone": "13800000000",
-    "email": "example@example.com",
+    "phone": "",
+    "email": "",
     "school": "中国民航大学",
     "major": "物联网工程",
     "degree": "本科",

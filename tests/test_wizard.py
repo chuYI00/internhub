@@ -256,6 +256,22 @@ def _make_pages():
     return p1, p2
 
 
+def _cleanup(out_csv, backup):
+    """还原 / 清掉解码产物，别把用户真实的 data/飞书岗位导出.csv 冲掉。
+
+    清理失败**绝不能让测试挂掉** —— 在受限环境（沙箱的批量删除保护、只读盘）里
+    os.remove 可能被拦，那是环境问题，不是导入链路的问题。
+    """
+    try:
+        if backup and os.path.exists(backup):
+            shutil.copy2(backup, out_csv)
+            os.remove(backup)
+        elif os.path.exists(out_csv):
+            os.remove(out_csv)                   # 测试前本来没有 → 别留垃圾
+    except Exception as e:                       # noqa: BLE001 环境守卫拦了也算不了什么
+        print(f"  (提示：测试产物未能清理，不影响断言 —— {e})")
+
+
 def _run_decoder_multi(paths: list):
     """跑 解码飞书表格.py（多文件），返回 {rows, text, out, warn}；跑完还原产物文件。"""
     import shutil
@@ -277,11 +293,7 @@ def _run_decoder_multi(paths: list):
         with open(out_csv, encoding="utf-8-sig") as f:
             text = f.read()
         rows = max(0, len([ln for ln in text.splitlines() if ln.strip()]) - 1)
-    if backup:
-        shutil.copy2(backup, out_csv)
-        os.remove(backup)
-    elif out_csv.exists():
-        os.remove(out_csv)                       # 测试前本来没有 → 别留垃圾
+    _cleanup(out_csv, backup)
     warn = "分页" in out
     return {"rows": rows, "text": text, "out": out, "warn": warn}
 
@@ -315,7 +327,10 @@ def _run_decoder(blob: str, tmpdir: str):
         with open(path, encoding="utf-8-sig") as f:
             _run_decoder.last_text = f.read()
     if backup:
-        shutil.copy2(backup, out_csv)
+        try:
+            shutil.copy2(backup, out_csv)
+        except Exception as e:                   # noqa: BLE001 还原失败也只是留个文件
+            print(f"  (提示：未能还原 {out_csv.name}，不影响断言 —— {e})")
     return path
 
 
